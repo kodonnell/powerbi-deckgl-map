@@ -1,4 +1,4 @@
-# Mapviz
+# Power BI deck.gl map custom visual
 
 Designed to support points / lines / polygons from <https://deck.gl/docs/api-reference/layers/geojson-layer> (i.e. not text/icons yet).
 
@@ -32,7 +32,7 @@ For now, the main things to know:
 - highlight this way: <https://learn.microsoft.com/en-us/power-bi/developer/visuals/highlight?tabs=Standard>
 - extra layers:
   - <https://deck.gl/docs/api-reference/layers/column-layer>
-  - swithc polygon layer to <https://deck.gl/docs/api-reference/layers/solid-polygon-layer>
+  - switch polygon layer to <https://deck.gl/docs/api-reference/layers/solid-polygon-layer>
   - aggregate:
     - <https://deck.gl/docs/api-reference/aggregation-layers/heatmap-layer>
     - <https://deck.gl/docs/api-reference/aggregation-layers/hexagon-layer>
