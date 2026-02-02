@@ -15,7 +15,7 @@ export default function getPolygonLayer(highlights: boolean, dataPoints: OurData
     const highlightCol = withOpacity(decodeHex(settings.highlight.highlightColor.value.value, [255, 0, 0, 255]), settings.highlight.highlightOpacity.value);
 
     return new PolygonLayer<OurData>({
-        id: 'polygon-layer',
+        id: `polygon-layer-${highlights}`,
         data: data,
         pickable: true,
         getPolygon: d => d.polygonData?.rings ? d.polygonData.rings.map(ring => ring.coordinates.map(c => [c.lon, c.lat, highlights ? 0 : 0.1])) : [], // TODO: offset doesn't seem to work?

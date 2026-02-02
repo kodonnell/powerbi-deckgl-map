@@ -3,6 +3,7 @@ import { OurData } from '../dataPoint';
 import { InputGeometryType } from '../enum';
 import { withOpacity, decodeHex } from '../col';
 import { PathCardSettings } from '../settings';
+
 export default function getPathLayer(highlights: boolean, dataPoints: OurData[], settings: PathCardSettings, selectedIds: string[], onClick: (info: any, event: any) => void) {
     const defaultLineColor = withOpacity(decodeHex(settings.line.color.defaultLineColor.value.value, [0, 0, 0, 100]), settings.line.color.defaultLineOpacity.value);
     let data = dataPoints.filter(x => x.type === InputGeometryType.Path);
@@ -13,7 +14,7 @@ export default function getPathLayer(highlights: boolean, dataPoints: OurData[],
     const highlightCol = withOpacity(decodeHex(settings.highlight.highlightColor.value.value, [255, 0, 0, 255]), settings.highlight.highlightOpacity.value);
 
     return new PathLayer<OurData>({
-        id: 'path-layer',
+        id: `path-layer-${highlights}`,
         data: data,
         pickable: true,
         getPath: d => d.pathData?.coordinates ? d.pathData.coordinates.flatMap(c => [c.lon, c.lat, highlights ? 0 : 0.1]) : [], // Slightly offset highlighted points to avoid z-fighting

@@ -15,7 +15,7 @@ export default function getArcLayer(highlights: boolean, dataPoints: OurData[], 
     const highlightCol = withOpacity(decodeHex(settings.highlight.highlightColor.value.value, [255, 0, 0, 255]), settings.highlight.highlightOpacity.value);
 
     return new ArcLayer<OurData>({
-        id: 'arc-layer',
+        id: `arc-layer-${highlights}`,
         data: data,
         pickable: true,
         getSourcePosition: d => [d.arcData!.point1.lon, d.arcData!.point1.lat],

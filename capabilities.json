@@ -10,31 +10,31 @@
             "displayName": "Geometry Type",
             "name": "geometryType",
             "kind": "Measure",
-            "description": "The type of geometry - point, line, or polygon"
+            "description": "The type of geometry - by default, the string 'scatter', 'line' (A->B), 'arc' (A-> B), 'path' (A->B->C ...) or 'polygon'"
         },
         {
             "displayName": "Point1 Latitude",
             "name": "point1Latitude",
             "kind": "Measure",
-            "description": "If you're plotting points, this is the latitude of the point"
+            "description": "Scatter: this is the latitude of the point. Lines/arcs: this is the latitude of the starting point"
         },
         {
             "displayName": "Point1 Longitude",
             "name": "point1Longitude",
             "kind": "Measure",
-            "description": "If you're plotting points, this is the longitude of the point"
+            "description": "Scatter: this is the longitude of the point. Lines/arcs: this is the longitude of the starting point"
         },
         {
             "displayName": "Point2 Latitude",
             "name": "point2Latitude",
             "kind": "Measure",
-            "description": "If you're plotting points, this is the latitude of the point"
+            "description": "Lines/arcs: this is the latitude of the ending point"
         },
         {
             "displayName": "Point2 Longitude",
             "name": "point2Longitude",
             "kind": "Measure",
-            "description": "If you're plotting points, this is the longitude of the point"
+            "description": "Lines/arcs: this is the longitude of the ending point"
         },
         {
             "displayName": "WKT Line/Polygon",
@@ -76,7 +76,7 @@
             "displayName": "(Line) line width (m)",
             "name": "lineLineWidth",
             "kind": "Measure",
-            "description": "The width of line's lines in meters"
+            "description": "The width of line's lines in meters."
         },
         {
             "displayName": "(Line) line color",

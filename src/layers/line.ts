@@ -13,7 +13,7 @@ export default function getLineLayer(highlights: boolean, dataPoints: OurData[],
     const highlightCol = withOpacity(decodeHex(settings.highlight.highlightColor.value.value, [255, 0, 0, 255]), settings.highlight.highlightOpacity.value);
 
     return new LineLayer<OurData>({
-        id: 'line-layer',
+        id: `line-layer-${highlights}`,
         data: data,
         pickable: true,
         getSourcePosition: d => [d.lineData!.point1.lon, d.lineData!.point1.lat, highlights ? 0 : 0.1], // Slightly offset highlighted points to avoid z-fighting

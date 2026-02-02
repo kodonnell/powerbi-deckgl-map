@@ -15,7 +15,7 @@ export default function getScatterLayer(highlights: boolean, dataPoints: OurData
     const highlightCol = withOpacity(decodeHex(settings.highlight.highlightColor.value.value, [255, 0, 0, 255]), settings.highlight.highlightOpacity.value);
 
     return new ScatterplotLayer<OurData>({
-        id: `scatterplot-layer-${highlights ? 'highlight' : 'normal'}`,
+        id: `scatterplot-layer-${highlights}`,
         data: data,
         pickable: true,
         stroked: settings.stroked.value,
@@ -45,9 +45,9 @@ export default function getScatterLayer(highlights: boolean, dataPoints: OurData
         onClick: (info, event) => onClick(info, event),
         updateTriggers: {
             getLineWidth: [settings.line.width.defaultLineWidth.value, settings.highlight.highlightSizeScale.value, selectedIds],
-            getRadius: [settings.defaultRadius.value, settings.highlight.highlightSizeScale.value, , selectedIds],
+            getRadius: [settings.defaultRadius.value, settings.highlight.highlightSizeScale.value, selectedIds],
             getFillColor: [settings.fill.defaultFillColor.value.value, settings.fill.defaultFillOpacity.value, settings.highlight.highlightColor.value.value, settings.highlight.highlightOpacity.value, selectedIds],
-            getLineColor: [settings.line.color.defaultLineColor.value.value, settings.line.color.defaultLineOpacity.value, settings.highlight.highlightColor.value.value, settings.highlight.highlightOpacity.value, , selectedIds],
+            getLineColor: [settings.line.color.defaultLineColor.value.value, settings.line.color.defaultLineOpacity.value, settings.highlight.highlightColor.value.value, settings.highlight.highlightOpacity.value, selectedIds],
         },
     });
 };

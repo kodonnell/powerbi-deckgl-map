@@ -1,5 +1,8 @@
 "use strict";
 
+import * as process from "process";
+(window as any).process = process;
+
 import powerbi from "powerbi-visuals-api";
 import { FormattingSettingsService } from "powerbi-visuals-utils-formattingmodel";
 import "./../style/visual.less";
