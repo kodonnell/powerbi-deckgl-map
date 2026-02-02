@@ -1,6 +1,16 @@
 const path = require('path');
+const webpack = require('webpack');
 
 module.exports = {
+    plugins: [
+        new webpack.ProvidePlugin({
+            process: 'process/browser',
+        }),
+        new webpack.NormalModuleReplacementPlugin(
+            /^process\/browser$/,
+            require.resolve('process/browser.js')
+        ),
+    ],
     module: {
         rules: [
             {
@@ -13,12 +23,14 @@ module.exports = {
     },
     resolve: {
         fullySpecified: false,
+        extensionAlias: {
+            '.js': ['.js', '.ts'],
+        },
         alias: {
-            'process/browser': path.resolve(__dirname, 'node_modules/process/browser.js'),
-            'process/browser.js': path.resolve(__dirname, 'node_modules/process/browser.js'),
+            'process/browser': require.resolve('process/browser.js'),
         },
         fallback: {
-            "process": require.resolve("process/browser.js"),
-        }
-    }
+            process: require.resolve('process/browser.js'),
+        },
+    },
 };
