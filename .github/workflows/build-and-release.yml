@@ -26,9 +26,6 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Install Power BI Visuals Tools
-        run: npm install -g powerbi-visuals-tools
-
       - name: Package visual
         run: |
           # The package command generates the .pbiviz file in the dist/ folder
