@@ -31,6 +31,7 @@ export default function getArcLayer(highlights: boolean, dataPoints: OurData[], 
         getTargetColor: d => highlights ? highlightCol : decodeHex(d.arcProperties?.targetColor, defaultTargetColor),
         widthMinPixels: settings.strokeWidth.lineWidthMinPixels.value * scale,
         widthMaxPixels: settings.strokeWidth.lineWidthMaxPixels.value * scale,
+        autoHighlight: true,
         onClick: (info, event) => onClick(info, event),
         updateTriggers: {
             getWidth: [settings.strokeWidth.defaultLineWidth.value, settings.highlight.highlightSizeScale.value, selectedIds],

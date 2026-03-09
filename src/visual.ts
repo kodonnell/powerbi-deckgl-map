@@ -141,11 +141,18 @@ export class Visual implements IVisual {
     }
 
     public onClick = (info, event) => {
+        console.log("Clicked on layer", info, event);
         if (info.object) {
             const multiSelect = (event.srcEvent as MouseEvent).ctrlKey;
 
             // Filter the selections:
             const id = info.object.id;
+            // const selectionId = info.object.selectionId;
+            if (!id) {
+                console.log("Clicked on object with no id or selectionId - ignoring", info.object);
+                return true;
+            }
+            console.log("Clicked on object with id", id, "multiSelect:", multiSelect);
             if (this.selectedIds.includes(id)) {
                 this.selectedIds = this.selectedIds.filter(x => x !== id);
             } else {
@@ -263,6 +270,7 @@ export class Visual implements IVisual {
     }
 
     public update(options: VisualUpdateOptions) {
+        console.log("Update called with options", options);
         this.lastOptions = options;
         if (this.deckOverlay === null) {
             console.log("Deck overlay not ready - retying in 100ms");

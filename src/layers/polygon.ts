@@ -38,6 +38,7 @@ export default function getPolygonLayer(highlights: boolean, dataPoints: OurData
         wireframe: settings.wireframe.value,
         lineJointRounded: settings.path.lineJointRounded.value,
         lineMiterLimit: settings.path.lineMiterLimit.value,
+        autoHighlight: true,
         onClick: (info, event) => onClick(info, event),
         updateTriggers: {
             getLineWidth: [settings.line.width.defaultLineWidth.value, settings.highlight.highlightSizeScale.value, selectedIds],

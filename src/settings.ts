@@ -518,32 +518,6 @@ export class PolygonCardSettings extends FormattingSettingsCard {
     ];
 }
 
-export class EncodingCardSettings extends FormattingSettingsCard {
-
-    encodingPrecision = new formattingSettings.NumUpDown({
-        name: "encodingPrecision",
-        displayName: "Encoding precision",
-        description: "Number of decimal places to use when decoding Google polyline coordinates",
-        value: 6,
-        options: {
-            minValue: {
-                type: powerbi.visuals.ValidatorType.Min,
-                value: 0
-            },
-            maxValue: {
-                type: powerbi.visuals.ValidatorType.Max,
-                value: 10
-            },
-        }
-    });
-
-    name: string = "encodingProps";
-    displayName: string = "Encoding properties"
-    slices: Array<FormattingSettingsSlice> = [
-        this.encodingPrecision
-    ];
-}
-
 export class MapCardSettings extends FormattingSettingsCard {
 
     baseMap = new formattingSettings.ItemDropdown({
@@ -696,6 +670,5 @@ export class VisualFormattingSettingsModel extends FormattingSettingsModel {
     map = new MapCardSettings();
     path = new PathCardSettings();
     polygon = new PolygonCardSettings();
-    encoding = new EncodingCardSettings();
-    cards = [this.map, this.scatter, this.line, this.path, this.arc, this.polygon, this.encoding];
+    cards = [this.map, this.scatter, this.line, this.path, this.arc, this.polygon];
 }

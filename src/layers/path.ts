@@ -33,6 +33,7 @@ export default function getPathLayer(highlights: boolean, dataPoints: OurData[],
         jointRounded: settings.path.lineJointRounded.value,
         miterLimit: settings.path.lineMiterLimit.value,
         billboard: settings.billboard.billboard.value,
+        autoHighlight: true,
         onClick: (info, event) => onClick(info, event),
         updateTriggers: {
             getWidth: [settings.line.width.defaultLineWidth.value, settings.highlight.highlightSizeScale.value, selectedIds],

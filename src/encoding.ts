@@ -1,47 +1,42 @@
-export function decodeFloats(encoded: string, precisions: number[], checkLonLat: boolean = false): number[][] {
-    // https://github.com/mapbox/polyline/blob/master/src/polyline.js
-    var index = 0,
-        out: number[][] = [],
-        shift = 0,
-        result = 0,
-        byte: number | null = null,
-        factors = precisions.map(d => Math.pow(10, d)),
-        values = precisions.map(d => 0);
+import { createWkp } from '@wkpjs/web';
+import { WKP_CORE_WASM_BASE64 } from './wkpWasmBase64';
 
-    while (index < encoded.length) {
-        byte = null;
-        factors.forEach((f, i) => {
-            shift = result = 0;
-            do {
-                byte = encoded.charCodeAt(index++) - 63;
-                result |= (byte & 0x1f) << shift;
-                shift += 5;
-            } while (byte >= 0x20);
-            values[i] += ((result & 1) ? ~(result >> 1) : (result >> 1));
-        })
-        const d = values.map((d, i) => d / factors[i]);
-        if (checkLonLat) {
-            var lon = d[0];
-            if (isNaN(lon) || lon < -180 || lon > 180) {
-                console.log("Invalid lon", lon);
-                continue;
-            }
-            var lat = d[1];
-            if (isNaN(lat) || lat < -90 || lat > 90) {
-                console.log("Invalid lat", lat);
-                continue;
-            }
-        }
-        out.push(d);
+let wkp: any;
+let workspace: any;
+let initError: Error | null = null;
+
+function base64ToUint8Array(base64: string): Uint8Array {
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) {
+        bytes[index] = binary.charCodeAt(index);
     }
-    return out;
-};
+    return bytes;
+}
 
-
-export function decodeFloatsWithCache(id: string, decodeCache, encoded: string, precisions: number[], checkLonLat: boolean = false): number[][] {
-    const key = id + '-' + precisions.toString();
-    if (!decodeCache.hasOwnProperty(key)) {
-        decodeCache[key] = decodeFloats(encoded, precisions, checkLonLat);
+(async () => {
+    console.log("Initializing WKP workspace...");
+    try {
+        const wasmBinary = base64ToUint8Array(WKP_CORE_WASM_BASE64);
+        wkp = await createWkp({ wasmBinary });
+        console.log("WKP workspace initialized.");
+        console.log("Creating WKP workspace...");
+        workspace = new wkp.Workspace();
+        console.log("WKP workspace created.");
+    } catch (error) {
+        initError = error as Error;
+        console.error("Failed to initialize WKP workspace.", error);
     }
-    return decodeCache[key];
+})();
+
+export function decode(encoded: string): { version: number, precision: number, dimensions: number, geometry: { type: string, coordinates: any } } {
+    console.log("Decoding WKP geometry...");
+    if (initError) {
+        throw initError;
+    }
+    if (!wkp || !workspace) {
+        throw new Error("WKP is still initializing. Try again after visual startup completes.");
+    }
+    const decoded = wkp.decode(encoded, workspace);
+    return decoded;
 }

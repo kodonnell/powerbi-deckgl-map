@@ -37,16 +37,16 @@
             "description": "Lines/arcs: this is the longitude of the ending point"
         },
         {
-            "displayName": "WKT Line/Polygon",
-            "name": "wktLineCoordinates",
+            "displayName": "Well Known Text",
+            "name": "wkt",
             "kind": "Measure",
-            "description": "The coordinates of the line/polygon in LineString or Polygon WKT format"
+            "description": "Geometry in WKT format. (If using line/arc you must use Point1/Point2.)"
         },
         {
-            "displayName": "Encoded Line Coordinates",
-            "name": "lineCoordinates",
+            "displayName": "Well Known Polyline",
+            "name": "wkp",
             "kind": "Measure",
-            "description": "The coordinates of the line/polygon, encoded as a Google polyline string"
+            "description": "Geometry in WKP format. (If using line/arc you must use Point1/Point2.)"
         },
         {
             "displayName": "Scatter radius (m)",
@@ -602,16 +602,6 @@
                     }
                 }
             }
-        },
-        "encodingProps": {
-            "displayName": "Encoding properties",
-            "properties": {
-                "encodingPrecision": {
-                    "type": {
-                        "numeric": true
-                    }
-                }
-            }
         }
     },
     "dataViewMappings": [
@@ -656,12 +646,12 @@
                         },
                         {
                             "bind": {
-                                "to": "wktLineCoordinates"
+                                "to": "wkt"
                             }
                         },
                         {
                             "bind": {
-                                "to": "lineCoordinates"
+                                "to": "wkp"
                             }
                         },
                         {

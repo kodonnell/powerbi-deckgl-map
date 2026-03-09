@@ -3,7 +3,7 @@ import powerbi from "powerbi-visuals-api";
 import VisualUpdateOptions = powerbi.extensibility.visual.VisualUpdateOptions;
 import ISelectionId = powerbi.visuals.ISelectionId;
 import IVisualHost = powerbi.extensibility.visual.IVisualHost;
-import { decodeFloatsWithCache } from "./encoding";
+import { decode } from "./encoding";
 import { OurData } from "./dataPoint";
 import { InputGeometryType } from "./enum";
 import { VisualFormattingSettingsModel } from "./settings";
@@ -66,8 +66,8 @@ export function createSelectorDataPoints(options: VisualUpdateOptions, settings:
     }
 
     // Geometry stuff:
-    const lineCoordinateValue = categorical.values.filter(x => x.source.roles.lineCoordinates)[0];
-    const wktLineCoordinateValue = categorical.values.filter(x => x.source.roles.wktLineCoordinates)[0];
+    const wkp = categorical.values.filter(x => x.source.roles.wkp)[0];
+    const wkt = categorical.values.filter(x => x.source.roles.wkt)[0];
     const point1LatitudeValue = categorical.values.filter(x => x.source.roles.point1Latitude)[0];
     const point1LongitudeValue = categorical.values.filter(x => x.source.roles.point1Longitude)[0];
     const point2LatitudeValue = categorical.values.filter(x => x.source.roles.point2Latitude)[0];
@@ -76,8 +76,8 @@ export function createSelectorDataPoints(options: VisualUpdateOptions, settings:
     const scatterRadiusValue = categorical.values.filter(x => x.source.roles.scatterRadius)[0];
     const polygonExtrudeElevationValue = categorical.values.filter(x => x.source.roles.polygonExtrudeElevation)[0];
 
-    const lineCoordinateValues = lineCoordinateValue ? lineCoordinateValue.values : null;
-    const wktLineCoordinateValues = wktLineCoordinateValue ? wktLineCoordinateValue.values : null;
+    const wkpValues = wkp ? wkp.values : null;
+    const wktValues = wkt ? wkt.values : null;
     const point1LatitudeValues = point1LatitudeValue ? point1LatitudeValue.values : null;
     const point1LongitudeValues = point1LongitudeValue ? point1LongitudeValue.values : null;
     const point2LatitudeValues = point2LatitudeValue ? point2LatitudeValue.values : null;
@@ -106,7 +106,6 @@ export function createSelectorDataPoints(options: VisualUpdateOptions, settings:
     const arcString = settings.arc.geometryType.value.trim().toLowerCase();
     const pathString = settings.path.geometryType.value.trim().toLowerCase();
     const polygonString = settings.polygon.geometryType.value.trim().toLowerCase();
-    const precision = settings.encoding.encodingPrecision.value;
     for (let i = 0, len = geometryIdValues.length; i < len; i++) {
         const selectionId: ISelectionId = host.createSelectionIdBuilder().withCategory(geometryIdValue, i).createSelectionId();
         const geometryId = geometryIdValue.values[i].toString();
@@ -124,6 +123,7 @@ export function createSelectorDataPoints(options: VisualUpdateOptions, settings:
             tooltipHtml: tooltipHtml ? tooltipHtml.toString() : null
         };
         if (geomType === scatterString) {
+            // TODO: check for wkt/wkp geometry if point1 not supplied.
             if (!point1LatitudeValues || !point1LongitudeValues) {
                 errorMessages.push(`Geometry ${geometryId}: invalid point coordinates`);
                 continue;
@@ -146,6 +146,7 @@ export function createSelectorDataPoints(options: VisualUpdateOptions, settings:
                 fillColor: scatterFillColorValue && scatterFillColorValue.values[i] ? scatterFillColorValue.values[i].toString() : null,
             };
         } else if (geomType === lineString || geomType === arcString) {
+            // TODO: check for wkt/wkp geometry if point1 not supplied.
             if (!point1LatitudeValues || !point1LongitudeValues || !point2LatitudeValues || !point2LongitudeValues) {
                 errorMessages.push(`Geometry ${geometryId}: invalid line/arc coordinates (need point1 and point2 lat and lon)`);
                 continue;
@@ -179,25 +180,25 @@ export function createSelectorDataPoints(options: VisualUpdateOptions, settings:
                     targetColor: arcTargetColorValue && arcTargetColorValue.values[i] ? arcTargetColorValue.values[i].toString() : null,
                 };
             }
-        } else if (geomType === pathString || geomType === polygonString) {
-            if (!lineCoordinateValues && !wktLineCoordinateValues) {
-                errorMessages.push(`Geometry ${geometryId} is a line/polygon but is missing line/polygon coordinates. Specify either encoded line coordinates or WKT line/polygon coordinates.`);
+        } else if (geomType === pathString) {
+            if (!wkpValues && !wktValues) {
+                errorMessages.push(`Geometry ${geometryId} is a line but is missing WKT/WKP. Specify either WKT/WKP.`);
                 continue;
             }
             let value = null;
             let isWkt = false;
-            if (lineCoordinateValues && lineCoordinateValues[i] !== null) {
-                value = lineCoordinateValues[i];
+            if (wkpValues && wkpValues[i] !== null) {
+                value = wkpValues[i];
                 isWkt = false;
-            } else if (wktLineCoordinateValues && wktLineCoordinateValues[i] !== null) {
-                value = wktLineCoordinateValues[i];
+            } else if (wktValues && wktValues[i] !== null) {
+                value = wktValues[i];
                 isWkt = true;
             }
             if (value === null) {
-                errorMessages.push(`Geometry ${geometryId} is a line/polygon but has null line/polygon coordinates. Specify either encoded line coordinates or WKT line/polygon coordinates.`);
+                errorMessages.push(`Geometry ${geometryId} is a line but has null line coordinates. Specify either encoded line coordinates or WKT line coordinates.`);
                 continue;
             }
-            let lineStrings: number[][][] = [];
+            let lineString: number[][] = [];
             if (isWkt) {
                 // Use WKT coordinates:
                 const wkt = value.toString();
@@ -208,61 +209,125 @@ export function createSelectorDataPoints(options: VisualUpdateOptions, settings:
                         continue;
                     }
                     if (geojson.type === 'LineString' && geojson.coordinates) {
-                        lineStrings = [geojson.coordinates as number[][]];
-                    } else if (geojson.type === 'Polygon' && geojson.coordinates) {
-                        lineStrings = geojson.coordinates as number[][][];
+                        lineString = geojson.coordinates as number[][];
                     } else {
-                        errorMessages.push(`Geometry ${geometryId}: WKT geometry must be LineString or Polygon.`);
+                        errorMessages.push(`Geometry ${geometryId}: WKT geometry must be LineString but was a ${geojson.type}.`);
                         continue;
                     }
                 } catch (error) {
                     errorMessages.push(`Geometry ${geometryId}: invalid WKT line coordinates.`);
                 }
             } else {
-                lineStrings = value.toString().split(",").map((line: string) => {
-                    const coordinates = decodeFloatsWithCache(geometryId, decodeCache, line, [precision, precision], true);
-                    if (coordinates.length === 0) {
-                        errorMessages.push(`Geometry ${geometryId}: invalid decoded line coordinates.`);
-                        return null;
+                try {
+                    const geom = decode(value.toString());
+                    if (geom.geometry.type != "LineString") {
+                        errorMessages.push(`Geometry ${geometryId}: encoded geometry must be LineString but was a ${geom.geometry.type}.`);
+                        continue;
                     }
-                    return coordinates;
-                }).filter(x => x !== null);
+                    // Check it's number[][]:
+                    if (!Array.isArray(geom.geometry.coordinates) || geom.geometry.coordinates.length == 0 || !Array.isArray(geom.geometry.coordinates[0])) {
+                        errorMessages.push(`Geometry ${geometryId}: encoded geometry must be number[][] coordinates.`);
+                        continue;
+                    }
+                    lineString = geom.geometry.coordinates as number[][];
+                } catch (error) {
+                    errorMessages.push(`Geometry ${geometryId}: invalid encoded line coordinates.`);
+                    continue;
+                }
             }
-            if (lineStrings.some(ls => ls.some(c => c.length !== 2 || !validLon(c[0]) || !validLat(c[1])))) {
-                errorMessages.push(`Geometry ${geometryId}: invalid line/polygon coordinates (one or more coordinates out of range)`);
+
+            if (lineString.some(c => c.length < 2 || !validLon(c[0]) || !validLat(c[1]))) {
+                errorMessages.push(`Geometry ${geometryId}: invalid line coordinates (one or more coordinates out of range)`);
                 continue;
             }
 
-            if (lineStrings.length === 0) {
+            if (lineString.length === 0) {
                 errorMessages.push(`Geometry ${geometryId}: no linestrings found.`);
                 continue;
             }
-            if (geomType === pathString) {
-                data.type = InputGeometryType.Path;
-                data.pathData = { coordinates: lineStrings.map(ls => ls.map(x => ({ lon: x[0], lat: x[1] }))).flat() };
-                data.pathProperties = {
-                    lineWidth: getNumberFromValue(pathWidthValue, i),
-                    lineColor: pathColorValue && pathColorValue.values[i] ? pathColorValue.values[i].toString() : null,
-                };
-            } else if (geomType === polygonString) {
-                // Close the polygons if needed:
-                let closedCoordinates = lineStrings.map(x => {
-                    const first = x[0];
-                    const last = x[x.length - 1];
-                    if (first[0] !== last[0] || first[1] !== last[1]) {
-                        x.push(first);
-                    }
-                    return x;
-                });
-                data.type = InputGeometryType.Polygon;
-                data.polygonData = { rings: closedCoordinates.map(ring => ({ coordinates: ring.map(x => ({ lon: x[0], lat: x[1] })) })) };
-                data.polygonProperties = {
-                    lineWidth: getNumberFromValue(polygonLineWidthValue, i),
-                    lineColor: polygonLineColorValue && polygonLineColorValue.values[i] ? polygonLineColorValue.values[i].toString() : null,
-                    fillColor: polygonFillColorValue && polygonFillColorValue.values[i] ? polygonFillColorValue.values[i].toString() : null,
-                    elevation: getNumberFromValue(polygonExtrudeElevationValue, i),
-                };
+            data.type = InputGeometryType.Path;
+            data.pathData = { coordinates: lineString.map(x => ({ lon: x[0], lat: x[1] })) };
+            data.pathProperties = {
+                lineWidth: getNumberFromValue(pathWidthValue, i),
+                lineColor: pathColorValue && pathColorValue.values[i] ? pathColorValue.values[i].toString() : null,
+            };
+            dataPoints.push(data);
+
+        } else if (geomType === polygonString) {
+            if (!wkpValues && !wktValues) {
+                errorMessages.push(`Geometry ${geometryId} is a polygon but is missing WKT/WKP. Specify either WKT/WKP.`);
+                continue;
             }
+            let value = null;
+            let isWkt = false;
+            if (wkpValues && wkpValues[i] !== null) {
+                value = wkpValues[i];
+                isWkt = false;
+            } else if (wktValues && wktValues[i] !== null) {
+                value = wktValues[i];
+                isWkt = true;
+            }
+            if (value === null) {
+                errorMessages.push(`Geometry ${geometryId} is a line/polygon but has null WKT/WKP coordinates. Specify either WKT/WKP.`);
+                continue;
+            }
+            let rings: number[][][] = [];
+            if (isWkt) {
+                // Use WKT coordinates:
+                const wkt = value.toString();
+                try {
+                    const geojson = parseSync(wkt, WKTLoader);
+                    if (!geojson) {
+                        errorMessages.push(`Geometry ${geometryId}: invalid WKT line coordinates.`);
+                        continue;
+                    } if (geojson.type === 'Polygon' && geojson.coordinates) {
+                        rings = geojson.coordinates as number[][][];
+                    } else {
+                        errorMessages.push(`Geometry ${geometryId}: WKT geometry must be Polygon but was a ${geojson.type}.`);
+                        continue;
+                    }
+                } catch (error) {
+                    errorMessages.push(`Geometry ${geometryId}: invalid WKT polygon coordinates.`);
+                }
+            } else {
+                try {
+                    const geom = decode(value.toString());
+                    if (geom.geometry.type != "Polygon") {
+                        errorMessages.push(`Geometry ${geometryId}: encoded geometry must be Polygon but was a ${geom.geometry.type}.`);
+                        continue;
+                    }
+                    // Check it's number[][][]:
+                    if (!Array.isArray(geom.geometry.coordinates) || geom.geometry.coordinates.length == 0 || !Array.isArray(geom.geometry.coordinates[0]) || !Array.isArray(geom.geometry.coordinates[0][0])) {
+                        errorMessages.push(`Geometry ${geometryId}: encoded geometry must be number[][][] coordinates.`);
+                        continue;
+                    }
+                    rings = geom.geometry.coordinates as number[][][];
+                } catch (error) {
+                    errorMessages.push(`Geometry ${geometryId}: invalid encoded polygon coordinates.`);
+                    continue;
+                }
+            }
+
+
+            if (rings.some(ring => ring.some(c => c.length < 2 || !validLon(c[0]) || !validLat(c[1])))) {
+                errorMessages.push(`Geometry ${geometryId}: invalid polygon coordinates (one or more coordinates out of range)`);
+                continue;
+            }
+
+            if (rings.length === 0) {
+                errorMessages.push(`Geometry ${geometryId}: no rings found.`);
+                continue;
+            }
+
+            data.type = InputGeometryType.Polygon;
+            data.polygonData = { rings: rings.map(ring => ({ coordinates: ring.map(x => ({ lon: x[0], lat: x[1] })) })) };
+            data.polygonProperties = {
+                lineWidth: getNumberFromValue(polygonLineWidthValue, i),
+                lineColor: polygonLineColorValue && polygonLineColorValue.values[i] ? polygonLineColorValue.values[i].toString() : null,
+                fillColor: polygonFillColorValue && polygonFillColorValue.values[i] ? polygonFillColorValue.values[i].toString() : null,
+                elevation: getNumberFromValue(polygonExtrudeElevationValue, i),
+            };
+
         } else {
             errorMessages.push(`Geometry ${geometryId}: invalid geometry type`);
             continue;
