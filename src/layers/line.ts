@@ -28,6 +28,7 @@ export default function getLineLayer(highlights: boolean, dataPoints: OurData[],
         getColor: d => highlights ? highlightCol : decodeHex(d.lineProperties?.lineColor, defaultLineColor),
         widthMinPixels: settings.line.width.lineWidthMinPixels.value * scale,
         widthMaxPixels: settings.line.width.lineWidthMaxPixels.value * scale,
+        autoHighlight: true,
         onClick: (info, event) => onClick(info, event),
         updateTriggers: {
             getWidth: [settings.line.width.defaultLineWidth.value, settings.highlight.highlightSizeScale.value, selectedIds],

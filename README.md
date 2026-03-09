@@ -25,11 +25,15 @@ For now, the main things to know:
 
 ## TODO
 
+- Allow Z in polygon and path layer.
+- Allow scatter to be from WKT/WKP.
 - Add example pbix.
 - Add screenshots to readme.
 - Add satellite layer?
 - Add icon to reset the map tilt/bearing.
+- Add setting for autohighlight for each layer.
 - highlight this way: <https://learn.microsoft.com/en-us/power-bi/developer/visuals/highlight?tabs=Standard>
+- selection only works on lines/arcs
 - extra layers:
   - <https://deck.gl/docs/api-reference/layers/column-layer>
   - switch polygon layer to <https://deck.gl/docs/api-reference/layers/solid-polygon-layer>
@@ -37,6 +41,7 @@ For now, the main things to know:
     - <https://deck.gl/docs/api-reference/aggregation-layers/heatmap-layer>
     - <https://deck.gl/docs/api-reference/aggregation-layers/hexagon-layer>
 - versioning - ensure package.json, pbiviz.json and the release all have same version.
+- vector layers ... why not working? CORS issue it seems, even if allowed through.
 
 ## Developing
 
@@ -45,6 +50,8 @@ For now, the main things to know:
 - `pbiviz start`
 - in your browser, go to `https://localhost:8080/assets/` - if complains about certs, you may need to install. Or click "go ahead" which will let you dev.
 - go to `app.powerbi.com`, enable developer mode, and add a custom visual.
+
+If you update the `@wkpjs/web` version, re-run `npm run generate:wkp-wasm` - we embed the wasm since PowerBI prevents loading it.
 
 ## Building
 

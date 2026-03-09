@@ -42,6 +42,7 @@ export default function getScatterLayer(highlights: boolean, dataPoints: OurData
         billboard: settings.billboard.billboard.value,
         lineWidthMinPixels: settings.line.width.lineWidthMinPixels.value * scale,
         lineWidthMaxPixels: settings.line.width.lineWidthMaxPixels.value * scale,
+        autoHighlight: true,
         onClick: (info, event) => onClick(info, event),
         updateTriggers: {
             getLineWidth: [settings.line.width.defaultLineWidth.value, settings.highlight.highlightSizeScale.value, selectedIds],
