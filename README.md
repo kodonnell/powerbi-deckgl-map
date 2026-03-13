@@ -33,7 +33,7 @@ Secondly, you can filter the selected shapes by click. This is two way:
   - Filters any associated visual to these selections.
   - But it *doesn't* remove the other shapes from the map. Why? Because otherwise you wouldn't be able to click another one (especially for multi-select). So you know what you've clicked, it highlights these in red (or whatever color you choose) - again, especially useful for multi-select.
   - When you click on the map, it resets the selection.
-- When you select items in an associated visual, it will filter the map to only show those selected shapes. If you already have a selection made at map-level, it will remove these.
+- When you select items in an associated visual, it will filter the map to only show those selected shapes i.e. selection not highlighting. If you already have a selection made at map-level, it will remove these.
 
 ## TODO
 

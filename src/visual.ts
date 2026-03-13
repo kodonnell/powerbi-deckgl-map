@@ -219,8 +219,6 @@ export class Visual implements IVisual {
                     this.selectionSource = (selectionIds && selectionIds.length > 0) ? "external" : "none";
                 }
                 const changed = this.syncSelectedIdsFromSelectionIds(selectionIds || []);
-                console.log("[Selection][callback] changed=", changed);
-                console.log("[Selection][callback] source=", this.selectionSource, "internalSelectionRequestCount=", this.internalSelectionRequestCount);
                 if (changed && this.lastOptions) {
                     this.update(this.lastOptions);
                 }
@@ -374,10 +372,7 @@ export class Visual implements IVisual {
                 });
             } else {
                 this.internalSelectionRequestCount++;
-                this.selectionManager.select(selectedIds, false).then((ids) => {
-                    console.log("Selection IDs after selection manager set them:", ids);
-                    this.syncSelectedIdsFromSelectionIds(ids as any[]);
-                }).finally(() => {
+                this.selectionManager.select(selectedIds, false).finally(() => {
                     this.internalSelectionRequestCount = Math.max(0, this.internalSelectionRequestCount - 1);
                 });
             }
@@ -561,11 +556,25 @@ export class Visual implements IVisual {
         // OK, process the data now we've got all of it.
         // TODO: if we want, we could draw it iteratively, but this will increase total execution time.
         this.dataPoints = createSelectorDataPoints(options, settings, this.host, this.decodeCache);
+        const visibleIdSet = new Set(this.dataPoints.map((d) => d.id));
+        this.selectedIds = this.selectedIds.filter((id) => visibleIdSet.has(id));
+
         const dataHighlightedIds = this.dataPoints.filter((d) => d.isHighlightedFromData).map((d) => d.id);
-        const effectiveSelectedIds = dataHighlightedIds.length > 0 ? dataHighlightedIds : this.selectedIds;
-        const shouldShowHighlightLayers = dataHighlightedIds.length > 0 || settings.highlighting.highlightOnClick.value;
-        const allowSelectionFlyTo = dataHighlightedIds.length > 0 || this.selectionSource === "external";
         const dataFilterApplied = options.dataViews[0].metadata.isDataFilterApplied;
+        const externallySelectedIds = dataHighlightedIds.length > 0
+            ? dataHighlightedIds
+            : (dataFilterApplied ? this.dataPoints.map((d) => d.id) : []);
+
+        if (this.internalSelectionRequestCount === 0) {
+            this.selectionSource = externallySelectedIds.length > 0
+                ? "external"
+                : (this.selectedIds.length > 0 ? this.selectionSource : "none");
+        }
+
+        const effectiveSelectedIds = externallySelectedIds.length > 0 ? externallySelectedIds : this.selectedIds;
+        const hasMapSelection = this.selectionSource === "map" && this.selectedIds.length > 0;
+        const shouldShowHighlightLayers = dataHighlightedIds.length > 0 || (settings.highlighting.highlightOnClick.value && hasMapSelection);
+        const allowSelectionFlyTo = dataHighlightedIds.length > 0 || this.selectionSource === "external";
 
         if (settings.map.flyTo.value) {
             this.handleFlyTo(settings.map, dataFilterApplied, allowSelectionFlyTo, effectiveSelectedIds);

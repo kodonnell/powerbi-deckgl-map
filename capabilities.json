@@ -145,6 +145,7 @@
             "description": "The HTML to display in the tooltip. You can use CSS = )"
         }
     ],
+    "supportsHighlight": false,
     "objects": {
         "mapProps": {
             "displayName": "Map properties",
