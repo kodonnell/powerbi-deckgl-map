@@ -1,8 +1,9 @@
 import { createWkp } from '@wkpjs/web';
 import { WKP_CORE_WASM_BASE64 } from './wkpWasmBase64';
+import { Geometry } from 'geojson';
 
 let wkp: any;
-let workspace: any;
+let ctx: any;
 let initError: Error | null = null;
 
 function base64ToUint8Array(base64: string): Uint8Array {
@@ -21,7 +22,7 @@ function base64ToUint8Array(base64: string): Uint8Array {
         wkp = await createWkp({ wasmBinary });
         console.log("WKP workspace initialized.");
         console.log("Creating WKP workspace...");
-        workspace = new wkp.Workspace();
+        ctx = new wkp.Context();
         console.log("WKP workspace created.");
     } catch (error) {
         initError = error as Error;
@@ -29,14 +30,18 @@ function base64ToUint8Array(base64: string): Uint8Array {
     }
 })();
 
-export function decode(encoded: string): { version: number, precision: number, dimensions: number, geometry: { type: string, coordinates: any } } {
+export function decodeAsGeometry(encoded: string): Geometry {
     console.log("Decoding WKP geometry...");
     if (initError) {
         throw initError;
     }
-    if (!wkp || !workspace) {
+    if (!wkp || !ctx) {
         throw new Error("WKP is still initializing. Try again after visual startup completes.");
     }
-    const decoded = wkp.decode(encoded, workspace);
-    return decoded;
+    const decoded = wkp.decode(ctx, encoded);
+    const geometry: Geometry = {
+        type: decoded.geometry.type,
+        coordinates: decoded.geometry.coordinates
+    };
+    return geometry;
 }

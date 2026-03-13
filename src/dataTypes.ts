@@ -2,7 +2,18 @@
 import powerbi from "powerbi-visuals-api";
 
 import ISelectionId = powerbi.visuals.ISelectionId;
-import { InputGeometryType } from "./enum";
+import { Polygon, MultiPolygon, LineString, MultiLineString } from "geojson";
+
+// Enum for supported layer types
+export enum InputLayerType {
+    Scatter = "scatter",
+    Path = "path",
+    Polygon = "polygon",
+    Line = "line",
+    Arc = "arc",
+    MultiPoint = "multipoint"
+}
+
 
 // Data types:
 export interface PointData {
@@ -17,13 +28,6 @@ export interface LineData {
     point2: PointData;
 }
 export interface ArcData extends LineData { }
-export interface PathData {
-    coordinates: PointData[];
-}
-export interface PolygonData {
-    rings: PathData[];
-}
-
 // Properties:
 interface StrokedProperties {
     lineWidth: number | null;
@@ -46,19 +50,48 @@ export interface ArcProperties {
 
 export interface OurData {
     id: string;
-    type: InputGeometryType;
+    type: InputLayerType;
     lineData?: LineData | null;
     lineProperties?: LineProperties | null;
     scatterData?: ScatterData | null;
     scatterProperties?: ScatterProperties | null;
     arcData?: ArcData | null;
     arcProperties?: ArcProperties | null;
-    pathData?: PathData | null;
+    pathData?: LineString | MultiLineString | null;
     pathProperties?: PathProperties | null;
-    polygonData?: PolygonData | null;
+    polygonData?: Polygon | MultiPolygon | null;
     polygonProperties?: PolygonProperties | null;
+    isHighlightedFromData?: boolean;
     selectionId: ISelectionId;
     tooltipHtml: string | null;
+}
+
+
+export interface RowValues {
+    geometryId: any | null;
+    layerType: any | null;
+    wkp: any | null;
+    wkt: any | null;
+    point1Latitude: any | null;
+    point1Longitude: any | null;
+    point2Latitude: any | null;
+    point2Longitude: any | null;
+    scatterRadius: any | null;
+    scatterLineColor: any | null;
+    scatterLineWidth: any | null;
+    scatterFillColor: any | null;
+    lineLineWidth: any | null;
+    lineLineColor: any | null;
+    pathWidth: any | null;
+    pathColor: any | null;
+    polygonLineColor: any | null;
+    polygonLineWidth: any | null;
+    polygonFillColor: any | null;
+    polygonExtrudeElevation: any | null;
+    arcLineWidth: any | null;
+    arcSourceColor: any | null;
+    arcTargetColor: any | null;
+    tooltip: any | null;
 }
 
 
@@ -76,10 +109,18 @@ export function getPointsFromData(data: OurData): PointData[] {
         points.push(data.arcData.point2);
     }
     if (data.pathData) {
-        points.push(...data.pathData.coordinates.map(coord => coord));
+        const bbox = data.pathData.bbox;
+        if (bbox) {
+            points.push({ lon: bbox[0], lat: bbox[1] });
+            points.push({ lon: bbox[2], lat: bbox[3] });
+        }
     }
     if (data.polygonData) {
-        points.push(...data.polygonData.rings.flatMap(ring => ring.coordinates.map(coord => coord)));
+        const bbox = data.polygonData.bbox;
+        if (bbox) {
+            points.push({ lon: bbox[0], lat: bbox[1] });
+            points.push({ lon: bbox[2], lat: bbox[3] });
+        }
     }
     return points;
 }

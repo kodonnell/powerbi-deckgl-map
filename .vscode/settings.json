@@ -38,15 +38,19 @@
         }
     ],
     "cSpell.words": [
+        "bbox",
         "customised",
         "dataviews",
         "deckgl",
         "feltzem",
         "linestring",
         "linestrings",
+        "multipoint",
+        "multipolygon",
         "pbiviz",
         "pbix",
         "pickable",
+        "powerbi",
         "RRGGBB",
         "RRGGBBAA",
         "scatterplot"

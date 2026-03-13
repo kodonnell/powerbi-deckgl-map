@@ -1,16 +1,17 @@
 import { LineLayer } from '@deck.gl/layers';
-import { OurData } from '../dataPoint';
-import { InputGeometryType } from '../enum';
+import { InputLayerType, OurData } from '../dataTypes';
 import { withOpacity, decodeHex } from '../col';
-import { LineCardSettings } from '../settings';
-export default function getLineLayer(highlights: boolean, dataPoints: OurData[], settings: LineCardSettings, selectedIds: string[], onClick: (info: any, event: any) => void) {
+import { HighlightingCardSettings, LineCardSettings } from '../settings';
+
+export default function getLineLayer(highlights: boolean, dataPoints: OurData[], settings: LineCardSettings, highlighting: HighlightingCardSettings, selectedIds: string[], onClick: (info: any, event: any) => void) {
     const defaultLineColor = withOpacity(decodeHex(settings.line.color.defaultLineColor.value.value, [0, 0, 0, 100]), settings.line.color.defaultLineOpacity.value);
-    let data = dataPoints.filter(x => x.type === InputGeometryType.Line);
+    let data = dataPoints.filter(x => x.type === InputLayerType.Line);
     if (highlights) {
         data = data.filter(x => selectedIds.includes(x.id));
     }
-    const scale = highlights ? settings.highlight.highlightSizeScale.value : 1.0;
-    const highlightCol = withOpacity(decodeHex(settings.highlight.highlightColor.value.value, [255, 0, 0, 255]), settings.highlight.highlightOpacity.value);
+    const scale = highlights ? highlighting.highlightSizeScale.value : 1.0;
+    const selectedHighlightColor = withOpacity(decodeHex(highlighting.highlightColor.value.value, [255, 0, 0, 255]), highlighting.highlightOpacity.value);
+    const autoHighlightColor = withOpacity(decodeHex(highlighting.autoHighlightColor.value.value, [255, 153, 0, 255]), highlighting.autoHighlightOpacity.value);
 
     return new LineLayer<OurData>({
         id: `line-layer-${highlights}`,
@@ -25,14 +26,16 @@ export default function getLineLayer(highlights: boolean, dataPoints: OurData[],
             }
             return settings.line.width.defaultLineWidth.value * scale;
         },
-        getColor: d => highlights ? highlightCol : decodeHex(d.lineProperties?.lineColor, defaultLineColor),
+        getColor: d => highlights ? selectedHighlightColor : decodeHex(d.lineProperties?.lineColor, defaultLineColor),
         widthMinPixels: settings.line.width.lineWidthMinPixels.value * scale,
         widthMaxPixels: settings.line.width.lineWidthMaxPixels.value * scale,
-        autoHighlight: true,
+        autoHighlight: highlighting.autoHighlight.value,
+        highlightColor: autoHighlightColor,
         onClick: (info, event) => onClick(info, event),
         updateTriggers: {
-            getWidth: [settings.line.width.defaultLineWidth.value, settings.highlight.highlightSizeScale.value, selectedIds],
-            getColor: [settings.line.color.defaultLineColor.value.value, settings.line.color.defaultLineOpacity.value, settings.highlight.highlightColor.value.value, settings.highlight.highlightOpacity.value, selectedIds],
+            getWidth: [settings.line.width.defaultLineWidth.value, highlighting.highlightSizeScale.value, selectedIds],
+            getColor: [settings.line.color.defaultLineColor.value.value, settings.line.color.defaultLineOpacity.value, highlighting.highlightColor.value.value, highlighting.highlightOpacity.value, selectedIds],
+            highlightColor: [highlighting.autoHighlightColor.value.value, highlighting.autoHighlightOpacity.value],
         },
     });
 };

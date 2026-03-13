@@ -16,27 +16,35 @@ For now, the main things to know:
   - Scatter - for scatters/points. See [ScatterplotLayer](https://deck.gl/docs/api-reference/layers/scatterplot-layer).
   - Line - for a straight line from one point to another. See [LineLayer](https://deck.gl/docs/api-reference/layers/line-layer).
   - Arc - for an arc from one point to another. See [ArcLayer](https://deck.gl/docs/api-reference/layers/arc-layer).
-  - Path - for a sequence of points making a 2D path/linestring. See [PathLayer](https://deck.gl/docs/api-reference/layers/path-layer).
-  - Polygon - for a sequence of points making a polygon. See [PolygonLayer](https://deck.gl/docs/api-reference/layers/polygon-layer).
-- We can only (?) have a single input to a visual, which means if we want multiple geometry types on each visual, they all need to be in the same table. Therefore:
-  - We specify a geometry type column which contains either `'scatter'`, `'arc'`, `'line'`, `'path'`, or `'polygon'` to specify which type to draw. (These strings can be customised in the options.)
+  - Path - for a sequence of points making a 2D path/linestring. See [PathLayer](https://deck.gl/docs/api-reference/layers/path-layer). Note, this supports `MultiLineString`s, and hence uses `GeoJsonLayer` under the hood (as it takes care of splitting into individual `LineString`s but keeping highlighting/picking still being tied to the main row.)
+  - Polygon - for a sequence of points making a polygon. See [PolygonLayer](https://deck.gl/docs/api-reference/layers/polygon-layer). Note, this supports `MultiPolygon`s as well - see above.
+- We can only (?) have a single input to a visual, which means if we want multiple layer types on each visual, they all need to be in the same table. Therefore:
+  - We specify a layer type column which contains either `'scatter'`, `'arc'`, `'line'`, `'path'`, or `'polygon'` to specify which type to draw. (These strings can be customised in the options.)
   - Individual columns/values/defaults for each of the different attributes. E.g. you can have a column for the scatter fill color or polygon fill color (which can be the same).
 - To support e.g. custom colors/widths per line/row, we allow the user to provide their own #RGB (for color) or float (for width). In Javascript we could let the user just provide a custom function (as deck.gl does), but that's trickier in Power BI.
+
+### Highlighting/selection
+
+Firstly, you can enable highlighting on hover. Easy, it doesn't change any of the data/selections.
+
+Secondly, you can filter the selected shapes by click. This is two way:
+
+- When you click an item on the map (or multiple by holding down CTRL key), it:
+  - Filters any associated visual to these selections.
+  - But it *doesn't* remove the other shapes from the map. Why? Because otherwise you wouldn't be able to click another one (especially for multi-select). So you know what you've clicked, it highlights these in red (or whatever color you choose) - again, especially useful for multi-select.
+  - When you click on the map, it resets the selection.
+- When you select items in an associated visual, it will filter the map to only show those selected shapes i.e. selection not highlighting. If you already have a selection made at map-level, it will remove these.
 
 ## TODO
 
 - Allow Z in polygon and path layer.
-- Allow scatter to be from WKT/WKP.
 - Add example pbix.
 - Add screenshots to readme.
 - Add satellite layer?
 - Add icon to reset the map tilt/bearing.
-- Add setting for autohighlight for each layer.
 - highlight this way: <https://learn.microsoft.com/en-us/power-bi/developer/visuals/highlight?tabs=Standard>
-- selection only works on lines/arcs
 - extra layers:
   - <https://deck.gl/docs/api-reference/layers/column-layer>
-  - switch polygon layer to <https://deck.gl/docs/api-reference/layers/solid-polygon-layer>
   - aggregate:
     - <https://deck.gl/docs/api-reference/aggregation-layers/heatmap-layer>
     - <https://deck.gl/docs/api-reference/aggregation-layers/hexagon-layer>
@@ -53,11 +61,11 @@ For now, the main things to know:
 
 If you update the `@wkpjs/web` version, re-run `npm run generate:wkp-wasm` - we embed the wasm since PowerBI prevents loading it.
 
-## Building
+### Building
 
 - `pbiviz package`
 
-## Releasing
+### Releasing
 
 To create a new release:
 
