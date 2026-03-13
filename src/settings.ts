@@ -19,7 +19,14 @@ export class BaseBillboardSettings extends FormattingSettingsCard {
         this.billboard
     ];
 }
-export class BaseHighlightSettings extends FormattingSettingsCard {
+export class HighlightingCardSettings extends FormattingSettingsCard {
+
+    highlightOnClick = new formattingSettings.ToggleSwitch({
+        name: "highlightOnClick",
+        displayName: "Highlight on click?",
+        description: "Whether clicked/selected objects are highlighted",
+        value: true
+    });
 
     highlightSizeScale = new formattingSettings.NumUpDown({
         name: "highlightSizeScale",
@@ -41,13 +48,45 @@ export class BaseHighlightSettings extends FormattingSettingsCard {
     highlightColor = new formattingSettings.ColorPicker({
         name: "highlightColor",
         displayName: "Highlight color",
-        description: "Color of highlighted points/lines",
+        description: "Color used for selected objects",
         value: { value: "#ff0000" }
     });
 
     highlightOpacity = new formattingSettings.Slider({
         name: "highlightOpacity",
         displayName: "Highlight opacity",
+        description: "Opacity used for selected objects",
+        value: 100,
+        options: {
+            minValue: {
+                type: powerbi.visuals.ValidatorType.Min,
+                value: 0
+            },
+            maxValue: {
+                type: powerbi.visuals.ValidatorType.Max,
+                value: 255
+            },
+
+        }
+    });
+
+    autoHighlight = new formattingSettings.ToggleSwitch({
+        name: "autoHighlight",
+        displayName: "Highlight on hover?",
+        description: "Whether hovered objects are automatically highlighted",
+        value: true
+    });
+
+    autoHighlightColor = new formattingSettings.ColorPicker({
+        name: "autoHighlightColor",
+        displayName: "Highlight color on hover",
+        description: "Color of highlighted points/lines",
+        value: { value: "#ff9900" }
+    });
+
+    autoHighlightOpacity = new formattingSettings.Slider({
+        name: "autoHighlightOpacity",
+        displayName: "Highlight opacity on hover",
         description: "Opacity of highlighted points/lines",
         value: 100,
         options: {
@@ -64,10 +103,17 @@ export class BaseHighlightSettings extends FormattingSettingsCard {
     });
 
     slices: Array<FormattingSettingsSlice> = [
+        this.highlightOnClick,
+        this.autoHighlight,
         this.highlightSizeScale,
         this.highlightColor,
-        this.highlightOpacity
+        this.highlightOpacity,
+        this.autoHighlightColor,
+        this.autoHighlightOpacity
     ];
+
+    name: string = "highlightingProps";
+    displayName: string = "Highlighting";
 }
 
 export class BaseStrokeWidthSettings extends FormattingSettingsCard {
@@ -76,7 +122,7 @@ export class BaseStrokeWidthSettings extends FormattingSettingsCard {
         name: "lineWidthMinPixels",
         displayName: "Line width min (pixels)",
         description: "Minimum width that a line will show as (in pixels)",
-        value: 1,
+        value: 2,
         options: {
             minValue: {
                 type: powerbi.visuals.ValidatorType.Min,
@@ -202,24 +248,23 @@ export class BaseFillSettings extends FormattingSettingsCard {
 }
 export class ScatterCardSettings extends FormattingSettingsCard {
 
-    highlight = new BaseHighlightSettings();
     billboard = new BaseBillboardSettings();
     line = new BaseStrokeSettings();
     fill = new BaseFillSettings();
 
-    geometryType = new formattingSettings.TextInput({
-        name: "geometryType",
-        displayName: "Scatter geometry type",
-        description: "If the geometry type column is equal to this (case-insensitive) value, it will be treated as a scatter",
+    layerType = new formattingSettings.TextInput({
+        name: "layerType",
+        displayName: "Layer Identifier",
+        description: "If the layer type column is equal to this (case-insensitive) value, it will be treated as a scatter",
         value: "scatter",
-        placeholder: "Enter geometry type"
+        placeholder: "Enter layer type"
     });
 
     radiusMinPixels = new formattingSettings.NumUpDown({
         name: "radiusMinPixels",
         displayName: "Point radius min (pixels)",
         description: "Minimum radius that a point will show as (in pixels)",
-        value: 1,
+        value: 2,
         options: {
             minValue: {
                 type: powerbi.visuals.ValidatorType.Min,
@@ -283,7 +328,7 @@ export class ScatterCardSettings extends FormattingSettingsCard {
     name: string = "scatterProps";
     displayName: string = "Scatter properties";
     slices: Array<FormattingSettingsSlice> = [
-        this.geometryType,
+        this.layerType,
         this.defaultRadius,
         this.radiusMinPixels,
         this.radiusMaxPixels,
@@ -292,43 +337,39 @@ export class ScatterCardSettings extends FormattingSettingsCard {
         ...this.fill.slices,
         ...this.line.slices,
         ...this.billboard.slices,
-        ...this.highlight.slices,
     ];
 }
 export class LineCardSettings extends FormattingSettingsCard {
 
-    highlight = new BaseHighlightSettings();
     line = new BaseStrokeSettings();
 
-    geometryType = new formattingSettings.TextInput({
-        name: "geometryType",
-        displayName: "Line geometry type",
-        description: "If the geometry type column is equal to this (case-insensitive) value, it will be treated as a line",
+    layerType = new formattingSettings.TextInput({
+        name: "layerType",
+        displayName: "Layer Identifier",
+        description: "If the layer type column is equal to this (case-insensitive) value, it will be treated as a line",
         value: "line",
-        placeholder: "Enter geometry type"
+        placeholder: "Enter layer type"
     });
 
     name: string = "lineProps";
     displayName: string = "Line properties";
     slices: Array<FormattingSettingsSlice> = [
-        this.geometryType,
+        this.layerType,
         ...this.line.slices,
-        ...this.highlight.slices,
     ];
 }
 
 export class ArcCardSettings extends FormattingSettingsCard {
 
-    highlight = new BaseHighlightSettings();
     strokeWidth = new BaseStrokeWidthSettings();
 
 
-    geometryType = new formattingSettings.TextInput({
-        name: "geometryType",
-        displayName: "Arc geometry type",
-        description: "If the geometry type column is equal to this (case-insensitive) value, it will be treated as an arc",
+    layerType = new formattingSettings.TextInput({
+        name: "layerType",
+        displayName: "Layer Identifier",
+        description: "If the layer type column is equal to this (case-insensitive) value, it will be treated as an arc",
         value: "arc",
-        placeholder: "Enter geometry type"
+        placeholder: "Enter layer type"
     });
 
     defaultSourceColor = new formattingSettings.ColorPicker({
@@ -382,13 +423,12 @@ export class ArcCardSettings extends FormattingSettingsCard {
     name: string = "arcProps";
     displayName: string = "Arc properties";
     slices: Array<FormattingSettingsSlice> = [
-        this.geometryType,
+        this.layerType,
         ...this.strokeWidth.slices,
         this.defaultSourceColor,
         this.defaultSourceOpacity,
         this.defaultTargetColor,
         this.defaultTargetOpacity,
-        ...this.highlight.slices,
     ];
 }
 
@@ -433,44 +473,41 @@ export class PathLineSettings extends FormattingSettingsCard {
 
 export class PathCardSettings extends FormattingSettingsCard {
 
-    highlight = new BaseHighlightSettings();
     line = new BaseStrokeSettings();
     path = new PathLineSettings();
     billboard = new BaseBillboardSettings();
 
-    geometryType = new formattingSettings.TextInput({
-        name: "geometryType",
-        displayName: "Path geometry type",
-        description: "If the geometry type column is equal to this (case-insensitive) value, it will be treated as a path",
+    layerType = new formattingSettings.TextInput({
+        name: "layerType",
+        displayName: "Layer Identifier",
+        description: "If the layer type column is equal to this (case-insensitive) value, it will be treated as a path",
         value: "path",
-        placeholder: "Enter geometry type"
+        placeholder: "Enter layer type"
     });
 
     name: string = "pathProps";
     displayName: string = "Path properties";
     slices: Array<FormattingSettingsSlice> = [
-        this.geometryType,
+        this.layerType,
         ...this.line.slices,
         ...this.path.slices,
-        ...this.highlight.slices,
         ...this.billboard.slices,
     ];
 }
 
 export class PolygonCardSettings extends FormattingSettingsCard {
 
-    highlight = new BaseHighlightSettings();
     line = new BaseStrokeSettings();
     fill = new BaseFillSettings();
     path = new PathLineSettings();
     billboard = new BaseBillboardSettings();
 
-    geometryType = new formattingSettings.TextInput({
-        name: "geometryType",
-        displayName: "Polygon geometry type",
-        description: "If the geometry type column is equal to this (case-insensitive) value, it will be treated as a polygon",
+    layerType = new formattingSettings.TextInput({
+        name: "layerType",
+        displayName: "Layer Identifier",
+        description: "If the layer type column is equal to this (case-insensitive) value, it will be treated as a polygon",
         value: "polygon",
-        placeholder: "Enter geometry type"
+        placeholder: "Enter layer type"
     });
 
     extruded = new formattingSettings.ToggleSwitch({
@@ -504,7 +541,7 @@ export class PolygonCardSettings extends FormattingSettingsCard {
     name: string = "polygonProps";
     displayName: string = "Polygon properties";
     slices: Array<FormattingSettingsSlice> = [
-        this.geometryType,
+        this.layerType,
         this.stroked,
         ...this.line.slices,
         this.filled,
@@ -514,7 +551,6 @@ export class PolygonCardSettings extends FormattingSettingsCard {
         // no lineCapRounded for polygons
         this.path.lineJointRounded,
         this.path.lineMiterLimit,
-        ...this.highlight.slices,
     ];
 }
 
@@ -670,5 +706,6 @@ export class VisualFormattingSettingsModel extends FormattingSettingsModel {
     map = new MapCardSettings();
     path = new PathCardSettings();
     polygon = new PolygonCardSettings();
-    cards = [this.map, this.scatter, this.line, this.path, this.arc, this.polygon];
+    highlighting = new HighlightingCardSettings();
+    cards = [this.map, this.highlighting, this.scatter, this.line, this.path, this.arc, this.polygon];
 }

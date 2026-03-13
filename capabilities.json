@@ -7,8 +7,8 @@
             "description": "A unique identifier for each geometry"
         },
         {
-            "displayName": "Geometry Type",
-            "name": "geometryType",
+            "displayName": "Layer Type",
+            "name": "layerType",
             "kind": "Measure",
             "description": "The type of geometry - by default, the string 'scatter', 'line' (A->B), 'arc' (A-> B), 'path' (A->B->C ...) or 'polygon'"
         },
@@ -191,10 +191,58 @@
                 }
             }
         },
+        "highlightingProps": {
+            "displayName": "Highlighting",
+            "properties": {
+                "highlightOnClick": {
+                    "type": {
+                        "bool": true
+                    }
+                },
+                "autoHighlight": {
+                    "type": {
+                        "bool": true
+                    }
+                },
+                "highlightSizeScale": {
+                    "type": {
+                        "numeric": true
+                    }
+                },
+                "highlightColor": {
+                    "type": {
+                        "fill": {
+                            "solid": {
+                                "color": true
+                            }
+                        }
+                    }
+                },
+                "highlightOpacity": {
+                    "type": {
+                        "numeric": true
+                    }
+                },
+                "autoHighlightColor": {
+                    "type": {
+                        "fill": {
+                            "solid": {
+                                "color": true
+                            }
+                        }
+                    }
+                },
+                "autoHighlightOpacity": {
+                    "type": {
+                        "numeric": true
+                    }
+                }
+            }
+        },
         "scatterProps": {
             "displayName": "Scatter properties",
             "properties": {
-                "geometryType": {
+                "layerType": {
                     "type": {
                         "text": true
                     }
@@ -271,32 +319,13 @@
                     "type": {
                         "bool": true
                     }
-                },
-                "highlightSizeScale": {
-                    "type": {
-                        "numeric": true
-                    }
-                },
-                "highlightColor": {
-                    "type": {
-                        "fill": {
-                            "solid": {
-                                "color": true
-                            }
-                        }
-                    }
-                },
-                "highlightOpacity": {
-                    "type": {
-                        "numeric": true
-                    }
                 }
             }
         },
         "lineProps": {
             "displayName": "Line properties",
             "properties": {
-                "geometryType": {
+                "layerType": {
                     "type": {
                         "text": true
                     }
@@ -329,32 +358,13 @@
                     "type": {
                         "numeric": true
                     }
-                },
-                "highlightSizeScale": {
-                    "type": {
-                        "numeric": true
-                    }
-                },
-                "highlightColor": {
-                    "type": {
-                        "fill": {
-                            "solid": {
-                                "color": true
-                            }
-                        }
-                    }
-                },
-                "highlightOpacity": {
-                    "type": {
-                        "numeric": true
-                    }
                 }
             }
         },
         "pathProps": {
             "displayName": "Path properties",
             "properties": {
-                "geometryType": {
+                "layerType": {
                     "type": {
                         "text": true
                     }
@@ -403,25 +413,6 @@
                         "bool": true
                     }
                 },
-                "highlightSizeScale": {
-                    "type": {
-                        "numeric": true
-                    }
-                },
-                "highlightColor": {
-                    "type": {
-                        "fill": {
-                            "solid": {
-                                "color": true
-                            }
-                        }
-                    }
-                },
-                "highlightOpacity": {
-                    "type": {
-                        "numeric": true
-                    }
-                },
                 "billboard": {
                     "type": {
                         "bool": true
@@ -432,7 +423,7 @@
         "arcProps": {
             "displayName": "Arc properties",
             "properties": {
-                "geometryType": {
+                "layerType": {
                     "type": {
                         "text": true
                     }
@@ -479,32 +470,13 @@
                     "type": {
                         "numeric": true
                     }
-                },
-                "highlightSizeScale": {
-                    "type": {
-                        "numeric": true
-                    }
-                },
-                "highlightColor": {
-                    "type": {
-                        "fill": {
-                            "solid": {
-                                "color": true
-                            }
-                        }
-                    }
-                },
-                "highlightOpacity": {
-                    "type": {
-                        "numeric": true
-                    }
                 }
             }
         },
         "polygonProps": {
             "displayName": "Polygon properties",
             "properties": {
-                "geometryType": {
+                "layerType": {
                     "type": {
                         "text": true
                     }
@@ -581,25 +553,6 @@
                     "type": {
                         "numeric": true
                     }
-                },
-                "highlightSizeScale": {
-                    "type": {
-                        "numeric": true
-                    }
-                },
-                "highlightColor": {
-                    "type": {
-                        "fill": {
-                            "solid": {
-                                "color": true
-                            }
-                        }
-                    }
-                },
-                "highlightOpacity": {
-                    "type": {
-                        "numeric": true
-                    }
                 }
             }
         }
@@ -621,7 +574,7 @@
                     "select": [
                         {
                             "bind": {
-                                "to": "geometryType"
+                                "to": "layerType"
                             }
                         },
                         {

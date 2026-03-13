@@ -21,14 +21,12 @@ import { NavigationControl } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { createSelectorDataPoints } from "./mapper";
 
-import { getPointsFromData, OurData } from "./dataPoint";
+import { getPointsFromData, OurData } from "./dataTypes";
 import getScatterLayer from "./layers/scatter";
 import getLineLayer from "./layers/line";
 import getArcLayer from "./layers/arc";
 import getPathLayer from "./layers/path";
 import getPolygonLayer from "./layers/polygon";
-import { } from "./settings"
-import { InputGeometryType } from "./enum";
 
 
 export class Visual implements IVisual {
@@ -44,10 +42,190 @@ export class Visual implements IVisual {
     private lastOptions: VisualUpdateOptions | null;
     private hasManuallyBeenNavigated: boolean;
     private currentBaseMap: string;
+    private selectionSource: "none" | "map" | "external";
+    private internalSelectionRequestCount: number;
+
+    private createResetViewControl() {
+        const container = document.createElement("div");
+        container.className = "maplibregl-ctrl maplibregl-ctrl-group";
+
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "deckgl-reset-view-button";
+        button.title = "Reset map";
+        button.setAttribute("aria-label", "Reset map view");
+        button.onclick = (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            this.resetViewToAllData();
+        };
+
+        container.appendChild(button);
+
+        return {
+            onAdd: () => container,
+            onRemove: () => {
+                container.remove();
+            }
+        };
+    }
+
+    private getBoundsFromDataPoints(dataPoints: OurData[]) {
+        let minLat = 90;
+        let maxLat = -90;
+        let minLon = 180;
+        let maxLon = -180;
+        let anyPoints = false;
+
+        dataPoints.forEach((d) => {
+            const points = getPointsFromData(d);
+            let n = points.length;
+            if (n > 0) {
+                anyPoints = true;
+            }
+            while (n--) {
+                const p = points[n];
+                const lat = p.lat;
+                const lon = p.lon;
+                if (lat < minLat) {
+                    minLat = lat;
+                }
+                if (lat > maxLat) {
+                    maxLat = lat;
+                }
+                if (lon < minLon) {
+                    minLon = lon;
+                }
+                if (lon > maxLon) {
+                    maxLon = lon;
+                }
+            }
+        });
+
+        return {
+            minLat,
+            maxLat,
+            minLon,
+            maxLon,
+            anyPoints
+        };
+    }
+
+    private resetViewToAllData() {
+        if (!this.map) {
+            return;
+        }
+
+        const mapSettings = this.formattingSettings?.map
+            || this.formattingSettingsService.populateFormattingSettingsModel(VisualFormattingSettingsModel, null).map;
+        const duration = mapSettings.flyToDuration.value;
+        const ll500 = 500 * 1e-5;
+
+        const center = this.map.getCenter();
+        this.map.jumpTo({
+            center,
+            zoom: this.map.getZoom(),
+            bearing: 0,
+            pitch: 0,
+        });
+
+        const bounds = this.getBoundsFromDataPoints(this.dataPoints || []);
+        if (!bounds.anyPoints) {
+            this.map.fitBounds(
+                [[mapSettings.initialWest.value, mapSettings.initialSouth.value], [mapSettings.initialEast.value, mapSettings.initialNorth.value]],
+                { duration }
+            );
+        } else {
+            const flyToPadding = mapSettings.flyToPadding.value / 100;
+            let dLat = (bounds.maxLat - bounds.minLat) * flyToPadding;
+            let dLon = (bounds.maxLon - bounds.minLon) * flyToPadding;
+            dLat = Math.max(dLat, ll500);
+            dLon = Math.max(dLon, ll500);
+
+            this.map.fitBounds(
+                [[bounds.minLon - dLon, bounds.minLat - dLat], [bounds.maxLon + dLon, bounds.maxLat + dLat]],
+                { duration }
+            );
+        }
+
+        this.hasManuallyBeenNavigated = false;
+        this.selectionSource = "none";
+        this.selectedIds = [];
+        this.internalSelectionRequestCount++;
+        this.selectionManager.clear().finally(() => {
+            this.internalSelectionRequestCount = Math.max(0, this.internalSelectionRequestCount - 1);
+            if (this.lastOptions) {
+                this.update(this.lastOptions);
+            }
+        });
+    }
+
+    private isMultiSelectEvent(event: any): boolean {
+        const candidates = [
+            event,
+            event?.originalEvent,
+            event?.srcEvent,
+            event?.sourceEvent,
+            event?.originalEvent?.srcEvent,
+            event?.srcEvent?.originalEvent,
+            event?.sourceEvent?.originalEvent,
+            event?.sourceEvent?.srcEvent,
+        ];
+        return candidates.some((ev) => !!(ev && (ev.ctrlKey || ev.metaKey)));
+    }
+
+    private getSelectionKey(selectionId: any): string | null {
+        if (!selectionId) {
+            return null;
+        }
+        const getKey = selectionId.getKey;
+        if (typeof getKey === "function") {
+            return getKey.call(selectionId);
+        }
+        return null;
+    }
+
+    private syncSelectedIdsFromSelectionIds(selectionIds: any[]): boolean {
+        const keySet = new Set(
+            (selectionIds || [])
+                .map((selectionId) => this.getSelectionKey(selectionId))
+                .filter((key): key is string => !!key)
+        );
+
+        const nextSelectedIds = this.dataPoints
+            .filter((d) => {
+                const key = this.getSelectionKey(d.selectionId);
+                return key !== null && keySet.has(key);
+            })
+            .map((d) => d.id);
+
+        const changed = nextSelectedIds.length !== this.selectedIds.length
+            || nextSelectedIds.some((id) => !this.selectedIds.includes(id));
+
+        if (changed) {
+            this.selectedIds = nextSelectedIds;
+        }
+
+        return changed;
+    }
 
     constructor(options: VisualConstructorOptions) {
         this.host = options.host;
         this.selectionManager = options.host.createSelectionManager();
+        const registerOnSelectCallback = (this.selectionManager as any).registerOnSelectCallback;
+        if (typeof registerOnSelectCallback === "function") {
+            registerOnSelectCallback.call(this.selectionManager, (selectionIds: any[]) => {
+                if (this.internalSelectionRequestCount === 0) {
+                    this.selectionSource = (selectionIds && selectionIds.length > 0) ? "external" : "none";
+                }
+                const changed = this.syncSelectedIdsFromSelectionIds(selectionIds || []);
+                console.log("[Selection][callback] changed=", changed);
+                console.log("[Selection][callback] source=", this.selectionSource, "internalSelectionRequestCount=", this.internalSelectionRequestCount);
+                if (changed && this.lastOptions) {
+                    this.update(this.lastOptions);
+                }
+            });
+        }
         const localizationManager = this.host.createLocalizationManager();
         this.formattingSettingsService = new FormattingSettingsService(localizationManager);
         this.dataPoints = [];
@@ -55,9 +233,12 @@ export class Visual implements IVisual {
         this.decodeCache = {};
         this.selectedIds = [];
         this.hasManuallyBeenNavigated = false;
+        this.selectionSource = "none";
+        this.internalSelectionRequestCount = 0;
 
         // Get the settings:
         const settings = this.formattingSettingsService.populateFormattingSettingsModel(VisualFormattingSettingsModel, null);
+        this.formattingSettings = settings;
         this.currentBaseMap = settings.map.baseMap.value.value as string;
 
         if (document) {
@@ -75,17 +256,28 @@ export class Visual implements IVisual {
                 console.log("Loaded");
                 this.hasManuallyBeenNavigated = false;
                 this.deckOverlay = new DeckOverlay({
-                    interleaved: true,
+                    interleaved: false, // Don't set to true - bricks performance!
                     layers: [],
-                    getCursor: ({ isHovering, isDragging }) => (isHovering ? "pointer" : (isDragging ? 'grabbing' : 'grab')),
+                    onHover: (hoverInfo) => {
+                        // MapLibre controls the canvas cursor, so set it directly from pick state.
+                        const canvas = this.map?.getCanvas?.();
+                        if (!canvas) {
+                            return;
+                        }
+                        canvas.style.cursor = hoverInfo?.object ? "pointer" : "grab";
+                    },
                     onClick: () => {
                         // Clear things:
                         console.log("Map clicked - clearing selection");
+                        this.selectionSource = "map";
                         this.selectedIds = [];
-                        this.selectionManager.clear();
-                        if (this.lastOptions) {
-                            this.update(this.lastOptions);
-                        }
+                        this.internalSelectionRequestCount++;
+                        this.selectionManager.clear().finally(() => {
+                            this.internalSelectionRequestCount = Math.max(0, this.internalSelectionRequestCount - 1);
+                            if (this.lastOptions) {
+                                this.update(this.lastOptions);
+                            }
+                        });
                     },
                     pickingRadius: 5,
                     getTooltip: (hoverInfo) => hoverInfo.object && hoverInfo.object.tooltipHtml && {
@@ -106,8 +298,12 @@ export class Visual implements IVisual {
                     console.log("Map move started");
                     this.hasManuallyBeenNavigated = true;
                 });
+                this.map.on('moveend', () => {
+                    console.log("Map move ended");
+                });
                 this.map.addControl(this.deckOverlay);
                 this.map.addControl(new NavigationControl());
+                this.map.addControl(this.createResetViewControl(), 'top-left');
             })
         }
     }
@@ -141,9 +337,10 @@ export class Visual implements IVisual {
     }
 
     public onClick = (info, event) => {
-        console.log("Clicked on layer", info, event);
+        console.log(`Clicked on layer ${info.layer.id}`);
         if (info.object) {
-            const multiSelect = (event.srcEvent as MouseEvent).ctrlKey;
+            this.selectionSource = "map";
+            const multiSelect = this.isMultiSelectEvent(event);
 
             // Filter the selections:
             const id = info.object.id;
@@ -153,23 +350,37 @@ export class Visual implements IVisual {
                 return true;
             }
             console.log("Clicked on object with id", id, "multiSelect:", multiSelect);
-            if (this.selectedIds.includes(id)) {
-                this.selectedIds = this.selectedIds.filter(x => x !== id);
-            } else {
-                if (multiSelect) {
-                    this.selectedIds.push(id);
+            console.log("[Selection][click] selectedIds before=", this.selectedIds);
+            if (multiSelect) {
+                if (this.selectedIds.includes(id)) {
+                    this.selectedIds = this.selectedIds.filter(x => x !== id);
                 } else {
-                    this.selectedIds = [id];
+                    this.selectedIds.push(id);
                 }
+            } else {
+                this.selectedIds = [id];
             }
+            console.log("[Selection][click] selectedIds after local toggle=", this.selectedIds);
 
             // Now get the selection IDs of the ones we're selected. (NB: why not use the selection manager and
             // info.object.properties.selectionId? Well, for some reason the selection ID is in an undefined stat)
-            this.selectionManager.clear();
             const selectedIds = this.dataPoints.filter(x => this.selectedIds.includes(x.id)).map(x => x.selectionId);
-            this.selectionManager.select(selectedIds, false).then((ids) => {
-                console.log("Selection IDs after selection manager set them:", ids);
-            });
+            if (selectedIds.length === 0) {
+                this.internalSelectionRequestCount++;
+                this.selectionManager.clear().then(() => {
+                    this.selectedIds = [];
+                }).finally(() => {
+                    this.internalSelectionRequestCount = Math.max(0, this.internalSelectionRequestCount - 1);
+                });
+            } else {
+                this.internalSelectionRequestCount++;
+                this.selectionManager.select(selectedIds, false).then((ids) => {
+                    console.log("Selection IDs after selection manager set them:", ids);
+                    this.syncSelectedIdsFromSelectionIds(ids as any[]);
+                }).finally(() => {
+                    this.internalSelectionRequestCount = Math.max(0, this.internalSelectionRequestCount - 1);
+                });
+            }
 
             // Update so we can draw the highlights
             this.update(this.lastOptions);
@@ -177,24 +388,29 @@ export class Visual implements IVisual {
         }
     };
 
-    public handleFlyTo(settings: MapCardSettings, dataFilterApplied: boolean) {
+    public handleFlyTo(settings: MapCardSettings, dataFilterApplied: boolean, allowSelectionFlyTo: boolean, selectedIdsOverride?: string[]) {
         var minLat = 90, maxLat = -90, minLon = 180, maxLon = -180, anyPoints = false;
 
         // We only fly to if:
         // - We have never been manually navigated
         // - There is a selection *or filter*, and we want to fly to that
 
-        const anySelected = this.selectedIds.length !== 0;
+        const activeSelectedIds = selectedIdsOverride || this.selectedIds;
+        const anySelected = activeSelectedIds.length !== 0;
         console.log(`Has manually navigated: ${this.hasManuallyBeenNavigated}, any selected: ${anySelected}, data filter applied: ${dataFilterApplied}`);
-        const canFlyTo = anySelected || !this.hasManuallyBeenNavigated || dataFilterApplied;
+        const canFlyTo = anySelected ? (allowSelectionFlyTo || dataFilterApplied) : (!this.hasManuallyBeenNavigated || dataFilterApplied);
+        console.log("[FlyTo] selectionSource=", this.selectionSource, "allowSelectionFlyTo=", allowSelectionFlyTo, "canFlyTo=", canFlyTo);
         if (!canFlyTo) {
+            if (anySelected && this.selectionSource === "map" && !allowSelectionFlyTo && !dataFilterApplied) {
+                console.log("[FlyTo] blocked: map-origin click selection does not trigger zoom.");
+            }
             console.log("Not flying to selected because user has manually navigated");
             return;
         }
 
         this.dataPoints.forEach((d) => {
             // If there's a filter selected, only include those points
-            if (anySelected && !this.selectedIds.includes(d.id)) {
+            if (anySelected && !activeSelectedIds.includes(d.id)) {
                 return;
             }
             const points = getPointsFromData(d);
@@ -269,8 +485,31 @@ export class Visual implements IVisual {
 
     }
 
+    // Update: debounce updates to avoid multiple updates in quick succession when data is loading, or when multiple properties are changing at once.
+    private updateQueued = false;
+    private pendingUpdateOptions: VisualUpdateOptions | null = null;
     public update(options: VisualUpdateOptions) {
-        console.log("Update called with options", options);
+        this.pendingUpdateOptions = options;
+        if (this.updateQueued) return;
+        this.updateQueued = true;
+        setTimeout(() => {
+            const latestOptions = this.pendingUpdateOptions;
+            this.pendingUpdateOptions = null;
+
+            if (latestOptions) {
+                this.performUpdate(latestOptions);
+            }
+
+            this.updateQueued = false;
+
+            // If another update arrived while processing, queue another pass.
+            if (this.pendingUpdateOptions) {
+                this.update(this.pendingUpdateOptions);
+            }
+        }, 150);
+    }
+
+    public performUpdate(options: VisualUpdateOptions) {
         this.lastOptions = options;
         if (this.deckOverlay === null) {
             console.log("Deck overlay not ready - retying in 100ms");
@@ -289,25 +528,30 @@ export class Visual implements IVisual {
             this.currentBaseMap = newBaseMap;
         }
 
-        // indicates this is the first segment of new data.
-        const dataView = options.dataViews[0];
-        let isFinishedLoaded = false;
-        if (options.operationKind == VisualDataChangeOperationKind.Create) {
-            console.log("New data arrived");
-            if (!dataView.metadata.segment) {
-                console.log("Data load finished - the first segment is the only one.");
-                isFinishedLoaded = true;
-            };
-        } else if (options.operationKind == VisualDataChangeOperationKind.Append) {
-            if (!dataView.metadata.segment) {
-                console.log("Data load finished - this is the last segment.");
-                isFinishedLoaded = true;
-            }
-        } else {
-            console.log('Unknown operation kind', options.operationKind);
+        const dataView = options.dataViews?.[0];
+        if (!dataView) {
+            this.dataPoints = [];
+            this.deckOverlay.setProps({ layers: [] });
+            return;
         }
 
-        if (!isFinishedLoaded) {
+        // Only request more data while Power BI is actively streaming data segments.
+        // Non-data updates (resize/format/selection) may have no operationKind and must not trigger fetchMoreData.
+        let shouldRequestMoreData = false;
+        if (options.operationKind == VisualDataChangeOperationKind.Create) {
+            console.log("New data arrived");
+            shouldRequestMoreData = !!dataView.metadata?.segment;
+            if (!shouldRequestMoreData) {
+                console.log("Data load finished - the first segment is the only one.");
+            }
+        } else if (options.operationKind == VisualDataChangeOperationKind.Append) {
+            shouldRequestMoreData = !!dataView.metadata?.segment;
+            if (!shouldRequestMoreData) {
+                console.log("Data load finished - this is the last segment.");
+            }
+        }
+
+        if (shouldRequestMoreData) {
             this.host.fetchMoreData(true);
             return;
         }
@@ -317,35 +561,33 @@ export class Visual implements IVisual {
         // OK, process the data now we've got all of it.
         // TODO: if we want, we could draw it iteratively, but this will increase total execution time.
         this.dataPoints = createSelectorDataPoints(options, settings, this.host, this.decodeCache);
-
+        const dataHighlightedIds = this.dataPoints.filter((d) => d.isHighlightedFromData).map((d) => d.id);
+        const effectiveSelectedIds = dataHighlightedIds.length > 0 ? dataHighlightedIds : this.selectedIds;
+        const shouldShowHighlightLayers = dataHighlightedIds.length > 0 || settings.highlighting.highlightOnClick.value;
+        const allowSelectionFlyTo = dataHighlightedIds.length > 0 || this.selectionSource === "external";
         const dataFilterApplied = options.dataViews[0].metadata.isDataFilterApplied;
-        // 2025/20/06 - Disabled auto-clear of selection when a data filter is applied, because then it behaves unexpectedly
-        // i.e. if you have a data filter applies (at page level) then none of your selections work. Note sure why I originally
-        // had this ... maybe there was a reason, so leave it commented out for now.
-        // if (dataFilterApplied && this.selectedIds.length > 0) {
-        //     console.log("Clearing selection because data filter is applied");
-        //     this.selectedIds = [];
-        //     this.selectionManager.clear();
-        // }
 
         if (settings.map.flyTo.value) {
-            this.handleFlyTo(settings.map, dataFilterApplied);
+            this.handleFlyTo(settings.map, dataFilterApplied, allowSelectionFlyTo, effectiveSelectedIds);
         }
-        const scatterData = this.dataPoints.filter(x => x.type === InputGeometryType.Scatter);
-        this.deckOverlay.setProps({
-            layers: [
-                getScatterLayer(true, scatterData, settings.scatter, this.selectedIds, this.onClick),
-                getScatterLayer(false, scatterData, settings.scatter, this.selectedIds, this.onClick),
-                getLineLayer(true, this.dataPoints, settings.line, this.selectedIds, this.onClick),
-                getLineLayer(false, this.dataPoints, settings.line, this.selectedIds, this.onClick),
-                getArcLayer(true, this.dataPoints, settings.arc, this.selectedIds, this.onClick),
-                getArcLayer(false, this.dataPoints, settings.arc, this.selectedIds, this.onClick),
-                getPathLayer(true, this.dataPoints, settings.path, this.selectedIds, this.onClick),
-                getPathLayer(false, this.dataPoints, settings.path, this.selectedIds, this.onClick),
-                getPolygonLayer(true, this.dataPoints, settings.polygon, this.selectedIds, this.onClick),
-                getPolygonLayer(false, this.dataPoints, settings.polygon, this.selectedIds, this.onClick),
-            ]
-        });
+        const layers = [
+            getScatterLayer(false, this.dataPoints, settings.scatter, settings.highlighting, effectiveSelectedIds, this.onClick),
+            getLineLayer(false, this.dataPoints, settings.line, settings.highlighting, effectiveSelectedIds, this.onClick),
+            getArcLayer(false, this.dataPoints, settings.arc, settings.highlighting, effectiveSelectedIds, this.onClick),
+            getPathLayer(false, this.dataPoints, settings.path, settings.highlighting, effectiveSelectedIds, this.onClick),
+            getPolygonLayer(false, this.dataPoints, settings.polygon, settings.highlighting, effectiveSelectedIds, this.onClick),
+        ];
+        if (shouldShowHighlightLayers) {
+            const highlightLayers = [
+                getScatterLayer(true, this.dataPoints, settings.scatter, settings.highlighting, effectiveSelectedIds, this.onClick),
+                getLineLayer(true, this.dataPoints, settings.line, settings.highlighting, effectiveSelectedIds, this.onClick),
+                getArcLayer(true, this.dataPoints, settings.arc, settings.highlighting, effectiveSelectedIds, this.onClick),
+                getPathLayer(true, this.dataPoints, settings.path, settings.highlighting, effectiveSelectedIds, this.onClick),
+                getPolygonLayer(true, this.dataPoints, settings.polygon, settings.highlighting, effectiveSelectedIds, this.onClick),
+            ];
+            layers.push(...highlightLayers);
+        }
+        this.deckOverlay.setProps({ layers });
 
     }
     public getFormattingModel(): powerbi.visuals.FormattingModel {
