@@ -240,6 +240,16 @@
                 }
             }
         },
+        "validationProps": {
+            "displayName": "Validation properties",
+            "properties": {
+                "validateGeometries": {
+                    "type": {
+                        "bool": true
+                    }
+                }
+            }
+        },
         "scatterProps": {
             "displayName": "Scatter properties",
             "properties": {

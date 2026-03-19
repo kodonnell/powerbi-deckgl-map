@@ -699,6 +699,21 @@ export class MapCardSettings extends FormattingSettingsCard {
     ];
 }
 
+export class ValidationPropertiesCardSettings extends FormattingSettingsCard {
+    validateGeometries = new formattingSettings.ToggleSwitch({
+        name: "validateGeometries",
+        displayName: "Validate Geometries",
+        description: "Validate geometry coordinates at load time. Can be turned off for performance once data validity is confirmed.",
+        value: true
+    });
+
+    name: string = "validationProps";
+    displayName: string = "Validation properties";
+    slices: Array<FormattingSettingsSlice> = [
+        this.validateGeometries
+    ];
+}
+
 export class VisualFormattingSettingsModel extends FormattingSettingsModel {
     scatter = new ScatterCardSettings();
     line = new LineCardSettings();
@@ -707,5 +722,6 @@ export class VisualFormattingSettingsModel extends FormattingSettingsModel {
     path = new PathCardSettings();
     polygon = new PolygonCardSettings();
     highlighting = new HighlightingCardSettings();
-    cards = [this.map, this.highlighting, this.scatter, this.line, this.path, this.arc, this.polygon];
+    validation = new ValidationPropertiesCardSettings();
+    cards = [this.map, this.validation, this.highlighting, this.scatter, this.line, this.path, this.arc, this.polygon];
 }

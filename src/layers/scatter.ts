@@ -30,7 +30,7 @@ export default function getScatterLayer(highlights: boolean, dataPoints: OurData
         },
         getRadius: d => {
             const r = d.scatterData?.radius;
-            if (typeof r === "number" && isFinite(r) && r > 0) {
+            if (r && typeof r === "number" && isFinite(r) && r > 0) {
                 return r * scale;
             }
             return settings.defaultRadius.value * scale;

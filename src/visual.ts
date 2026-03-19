@@ -20,7 +20,7 @@ import { MapboxOverlay as DeckOverlay } from '@deck.gl/mapbox';
 import { NavigationControl } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { createSelectorDataPoints } from "./mapper";
-import { getDataBoundingBox } from "./bounds";
+import { getDataBoundingBox } from "./geom";
 
 import { OurData } from "./dataTypes";
 import getScatterLayer from "./layers/scatter";
@@ -420,31 +420,7 @@ export class Visual implements IVisual {
         }
     }
 
-    // Update: debounce updates to avoid multiple updates in quick succession when data is loading, or when multiple properties are changing at once.
-    private updateQueued = false;
-    private pendingUpdateOptions: VisualUpdateOptions | null = null;
     public update(options: VisualUpdateOptions) {
-        this.pendingUpdateOptions = options;
-        if (this.updateQueued) return;
-        this.updateQueued = true;
-        setTimeout(() => {
-            const latestOptions = this.pendingUpdateOptions;
-            this.pendingUpdateOptions = null;
-
-            if (latestOptions) {
-                this.performUpdate(latestOptions);
-            }
-
-            this.updateQueued = false;
-
-            // If another update arrived while processing, queue another pass.
-            if (this.pendingUpdateOptions) {
-                this.update(this.pendingUpdateOptions);
-            }
-        }, 150);
-    }
-
-    public performUpdate(options: VisualUpdateOptions) {
         this.lastOptions = options;
         if (this.deckOverlay === null) {
             console.log("Deck overlay not ready - retying in 100ms");
@@ -453,7 +429,10 @@ export class Visual implements IVisual {
             }, 100);
             return;
         }
-        this.formattingSettings = this.formattingSettingsService.populateFormattingSettingsModel(VisualFormattingSettingsModel, options.dataViews[0]);
+        const dataView = options.dataViews?.[0];
+        if (dataView) {
+            this.formattingSettings = this.formattingSettingsService.populateFormattingSettingsModel(VisualFormattingSettingsModel, dataView);
+        }
         var settings = this.formattingSettings;
 
         // Check if baseMap changed
@@ -463,7 +442,6 @@ export class Visual implements IVisual {
             this.currentBaseMap = newBaseMap;
         }
 
-        const dataView = options.dataViews?.[0];
         if (!dataView) {
             this.dataPoints = [];
             this.deckOverlay.setProps({ layers: [] });

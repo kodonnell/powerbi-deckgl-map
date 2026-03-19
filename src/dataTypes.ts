@@ -21,7 +21,7 @@ export interface PointData {
     lat: number;
 }
 export interface ScatterData extends PointData {
-    radius: number;  // in meters
+    radius: number | null;  // in meters
 }
 export interface LineData {
     point1: PointData;

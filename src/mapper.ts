@@ -10,92 +10,10 @@ import { WKTLoader } from '@loaders.gl/wkt';
 import { parseSync } from '@loaders.gl/core';
 import { Geometry, Polygon, MultiPolygon } from 'geojson';
 import { parsePath } from "./parsers/path";
-import { getNumberFromValue } from "./powerbiUtils";
-
-const validLat = (lat: number): boolean => {
-    return isFinite(lat) && lat >= -90 && lat <= 90;
-}
-const validLon = (lon: number): boolean => {
-    return isFinite(lon) && lon >= -180 && lon <= 180;
-}
-const parseScatter = (isProvided: RowValues, rowValues: RowValues, errorMessages: string[], data: OurData): boolean => {
-    if (!isProvided.point1Latitude || !isProvided.point1Longitude || rowValues.point1Latitude === null || rowValues.point1Longitude === null) {
-        errorMessages.push(`Geometry ${rowValues.geometryId}: invalid point coordinates`);
-        return false;
-    }
-    const lat = parseFloat(rowValues.point1Latitude.toString()); // why not user number
-    const lon = parseFloat(rowValues.point1Longitude.toString());
-    if (!validLat(lat) || !validLon(lon)) {
-        errorMessages.push(`Geometry ${rowValues.geometryId}: invalid point coordinates (lat or lon out of range)`);
-        return false;
-    }
-    if (lat === null || lon === null) {
-        errorMessages.push(`Geometry ${rowValues.geometryId}: one or more point coordinates parse to null`);
-        return false;
-    }
-    data.type = InputLayerType.Scatter;
-    data.scatterData = { lat: lat, lon: lon, radius: getNumberFromValue(rowValues.scatterRadius) };
-    data.scatterProperties = {
-        lineWidth: getNumberFromValue(rowValues.scatterLineWidth),
-        lineColor: rowValues.scatterLineColor?.toString(),
-        fillColor: rowValues.scatterFillColor?.toString(),
-    };
-    return true;
-}
-
-const parseLineArcGeometry = (isProvided: RowValues, rowValues: RowValues, errorMessages: string[]): [boolean, LineData | null] => {
-    if (!isProvided.point1Latitude || !isProvided.point1Longitude || !isProvided.point2Latitude || !isProvided.point2Longitude
-        || rowValues.point1Latitude === null || rowValues.point1Longitude === null || rowValues.point2Latitude === null || rowValues.point2Longitude === null) {
-        errorMessages.push(`Geometry ${rowValues.geometryId}: invalid line/arc coordinates (need point1 and point2 lat and lon)`);
-        return [false, null];
-    }
-    const lat1 = parseFloat(rowValues.point1Latitude.toString()); // why not user number
-    const lon1 = parseFloat(rowValues.point1Longitude.toString());
-    const lat2 = parseFloat(rowValues.point2Latitude.toString());
-    const lon2 = parseFloat(rowValues.point2Longitude.toString());
-    if (lat1 === null || lon1 === null || lat2 === null || lon2 === null) {
-        errorMessages.push(`Geometry ${rowValues.geometryId}: invalid line/arc coordinates (one or more point coordinates parse to null)`);
-        return [false, null];
-    }
-    if (!validLat(lat1) || !validLon(lon1) || !validLat(lat2) || !validLon(lon2)) {
-        errorMessages.push(`Geometry ${rowValues.geometryId}: invalid line/arc coordinates (lat or lon out of range)`);
-        return [false, null];
-    }
-    const lineData: LineData = {
-        point1: { lat: lat1, lon: lon1 },
-        point2: { lat: lat2, lon: lon2 },
-    };
-    return [true, lineData];
-}
-
-const parseLine = (isProvided: RowValues, rowValues: RowValues, errorMessages: string[], data: OurData): boolean => {
-    const [ok, geometryParsed] = parseLineArcGeometry(isProvided, rowValues, errorMessages);
-    if (!ok || !geometryParsed) {
-        return false;
-    }
-    data.type = InputLayerType.Line;
-    data.lineData = geometryParsed;
-    data.lineProperties = {
-        lineWidth: getNumberFromValue(rowValues.lineLineWidth),
-        lineColor: rowValues.lineLineColor?.toString(),
-    };
-    return true;
-}
-
-const parseArc = (isProvided: RowValues, rowValues: RowValues, errorMessages: string[], data: OurData): boolean => {
-    const [ok, geometryParsed] = parseLineArcGeometry(isProvided, rowValues, errorMessages);
-    if (!ok || !geometryParsed) {
-        return false;
-    }
-    data.type = InputLayerType.Arc;
-    data.arcData = geometryParsed;
-    data.arcProperties = {
-        lineWidth: getNumberFromValue(rowValues.arcLineWidth),
-        sourceColor: rowValues.arcSourceColor?.toString(),
-        targetColor: rowValues.arcTargetColor?.toString(),
-    };
-    return true;
-}
+import { parsePolygon } from "./parsers/polygon";
+import { parseScatter } from "./parsers/scatter";
+import { parseLine, parseArc } from "./parsers/lineArc";
+import { validateData } from "./geom";
 
 const parseWkt = (wkt: string, geometryId: any, errorMessages: string[]): Geometry | null => {
     if (!wkt || wkt.trim() === "") {
@@ -133,59 +51,6 @@ const parseWkp = (wkp: string, geometryId: any, errorMessages: string[]): Geomet
         errorMessages.push(`Geometry ${geometryId}: failed to decode WKP: ${error}`);
         return null;
     }
-}
-
-const parsePolygon = (wktGeometry: Geometry, wkpGeometry: Geometry, rowValues: RowValues, errorMessages: string[], data: OurData): boolean => {
-    let geometry: Polygon | MultiPolygon | null = null;
-    const id = rowValues.geometryId;
-    if (wktGeometry) {
-        if (wktGeometry.type === 'Polygon') {
-            if (wktGeometry.coordinates.length === 0 || !Array.isArray(wktGeometry.coordinates[0]) || !Array.isArray(wktGeometry.coordinates[0][0])) {
-                errorMessages.push(`Geometry ${id}: invalid WKT polygon coordinates.`);
-                return false;
-            }
-            geometry = wktGeometry;
-        } else if (wktGeometry.type === 'MultiPolygon') {
-            if (wktGeometry.coordinates.length === 0 || !Array.isArray(wktGeometry.coordinates[0]) || !Array.isArray(wktGeometry.coordinates[0][0]) || !Array.isArray(wktGeometry.coordinates[0][0][0])) {
-                errorMessages.push(`Geometry ${id}: invalid WKT multipolygon coordinates.`);
-                return false;
-            }
-            geometry = wktGeometry;
-        } else {
-            errorMessages.push(`Geometry ${id}: WKT geometry is not a polygon or multipolygon.`);
-            return false;
-        }
-    } else if (wkpGeometry) {
-        if (wkpGeometry.type === 'Polygon') {
-            if (wkpGeometry.coordinates.length === 0 || !Array.isArray(wkpGeometry.coordinates[0]) || !Array.isArray(wkpGeometry.coordinates[0][0])) {
-                errorMessages.push(`Geometry ${id}: invalid encoded polygon coordinates.`);
-                return false;
-            }
-            geometry = wkpGeometry;
-        } else if (wkpGeometry.type === 'MultiPolygon') {
-            if (wkpGeometry.coordinates.length === 0 || !Array.isArray(wkpGeometry.coordinates[0]) || !Array.isArray(wkpGeometry.coordinates[0][0]) || !Array.isArray(wkpGeometry.coordinates[0][0][0])) {
-                errorMessages.push(`Geometry ${id}: invalid encoded multipolygon coordinates.`);
-                return false;
-            }
-            geometry = wkpGeometry;
-        } else {
-            errorMessages.push(`Geometry ${id}: encoded geometry is not a polygon or multipolygon.`);
-            return false;
-        }
-    }
-    if (!geometry) {
-        errorMessages.push(`Geometry ${id} is a polygon but is missing WKT/WKP. Specify either WKT/WKP.`);
-        return false;
-    }
-    data.type = InputLayerType.Polygon;
-    data.polygonData = geometry;
-    data.polygonProperties = {
-        lineWidth: getNumberFromValue(rowValues.polygonLineWidth),
-        lineColor: rowValues.polygonLineColor?.toString(),
-        fillColor: rowValues.polygonFillColor?.toString(),
-        elevation: getNumberFromValue(rowValues.polygonExtrudeElevation),
-    };
-    return true;
 }
 
 export function createSelectorDataPoints(options: VisualUpdateOptions, settings: VisualFormattingSettingsModel, host: IVisualHost, decodeCache: object): OurData[] {
@@ -260,6 +125,9 @@ export function createSelectorDataPoints(options: VisualUpdateOptions, settings:
     const arcString = settings.arc.layerType.value.trim().toLowerCase();
     const pathString = settings.path.layerType.value.trim().toLowerCase();
     const polygonString = settings.polygon.layerType.value.trim().toLowerCase();
+    const validateGeometries = settings.validation.validateGeometries.value;
+
+    console.log(`[validation] validateGeometries is ${validateGeometries}`);
 
     for (let i = 0, len = rowValueArrays.geometryId.length; i < len; i++) {
         const rowValues: RowValues = Object.fromEntries(
@@ -315,6 +183,11 @@ export function createSelectorDataPoints(options: VisualUpdateOptions, settings:
         // Bail if no geometry defined:
         if (data.type === null) {
             errorMessages.push(`Geometry ${id}: no geometry defined. Check that the layer type is correct and that WKT/WKP or point coordinates are provided as needed.`);
+            continue;
+        }
+
+        if (validateGeometries && !validateData(data)) {
+            errorMessages.push(`Geometry ${id}: invalid coordinates found (latitude must be in [-90, 90], longitude in [-180, 180]).`);
             continue;
         }
 
