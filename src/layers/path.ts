@@ -18,6 +18,7 @@ export default function getPathLayer(highlights: boolean, dataPoints: OurData[],
         geometry: d.pathData,
         properties: d.pathProperties,
         selectionId: d.selectionId,
+        tooltipHtml: d.tooltipHtml,
         id: d.id
     }));
 
