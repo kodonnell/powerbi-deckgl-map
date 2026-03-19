@@ -278,19 +278,25 @@ export class Visual implements IVisual {
                         });
                     },
                     pickingRadius: 5,
-                    getTooltip: (hoverInfo) => hoverInfo.object && hoverInfo.object.tooltipHtml && {
-                        html: "<div>" + hoverInfo.object.tooltipHtml + "</div>",
-                        style: {
-                            "z-index": 2,
-                            "color": "#a0a7b4",
-                            "background-color": "#29323c",
-                            "padding": "2px 5px",
-                            "border-radius": "3px",
-                            "margin": "0px",
-                            "font-size": "12px",
-                            "margin-left": "25px", // Offset from the mouse
+                    getTooltip: (hoverInfo) => {
+                        if (!hoverInfo.object || !hoverInfo.object.tooltipHtml) {
+                            return null;
                         }
-                    },
+
+                        return {
+                            html: "<div>" + hoverInfo.object.tooltipHtml + "</div>",
+                            style: {
+                                "z-index": 2,
+                                "color": "#a0a7b4",
+                                "background-color": "#29323c",
+                                "padding": "2px 5px",
+                                "border-radius": "3px",
+                                "margin": "0px",
+                                "font-size": "12px",
+                                "margin-left": "25px", // Offset from the mouse
+                            }
+                        };
+                    }
                 });
                 this.map.on('movestart', () => {
                     console.log("Map move started");

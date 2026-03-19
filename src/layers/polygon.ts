@@ -19,6 +19,7 @@ export default function getPolygonLayer(highlights: boolean, dataPoints: OurData
         geometry: d.polygonData,
         properties: d.polygonProperties,
         selectionId: d.selectionId,
+        tooltipHtml: d.tooltipHtml,
         id: d.id
     }));
 
