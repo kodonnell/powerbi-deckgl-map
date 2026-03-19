@@ -20,8 +20,9 @@ import { MapboxOverlay as DeckOverlay } from '@deck.gl/mapbox';
 import { NavigationControl } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { createSelectorDataPoints } from "./mapper";
+import { getDataBoundingBox } from "./geom";
 
-import { getPointsFromData, OurData } from "./dataTypes";
+import { OurData } from "./dataTypes";
 import getScatterLayer from "./layers/scatter";
 import getLineLayer from "./layers/line";
 import getArcLayer from "./layers/arc";
@@ -70,47 +71,6 @@ export class Visual implements IVisual {
         };
     }
 
-    private getBoundsFromDataPoints(dataPoints: OurData[]) {
-        let minLat = 90;
-        let maxLat = -90;
-        let minLon = 180;
-        let maxLon = -180;
-        let anyPoints = false;
-
-        dataPoints.forEach((d) => {
-            const points = getPointsFromData(d);
-            let n = points.length;
-            if (n > 0) {
-                anyPoints = true;
-            }
-            while (n--) {
-                const p = points[n];
-                const lat = p.lat;
-                const lon = p.lon;
-                if (lat < minLat) {
-                    minLat = lat;
-                }
-                if (lat > maxLat) {
-                    maxLat = lat;
-                }
-                if (lon < minLon) {
-                    minLon = lon;
-                }
-                if (lon > maxLon) {
-                    maxLon = lon;
-                }
-            }
-        });
-
-        return {
-            minLat,
-            maxLat,
-            minLon,
-            maxLon,
-            anyPoints
-        };
-    }
-
     private resetViewToAllData() {
         if (!this.map) {
             return;
@@ -129,8 +89,8 @@ export class Visual implements IVisual {
             pitch: 0,
         });
 
-        const bounds = this.getBoundsFromDataPoints(this.dataPoints || []);
-        if (!bounds.anyPoints) {
+        const bounds = getDataBoundingBox(this.dataPoints || []);
+        if (!bounds) {
             this.map.fitBounds(
                 [[mapSettings.initialWest.value, mapSettings.initialSouth.value], [mapSettings.initialEast.value, mapSettings.initialNorth.value]],
                 { duration }
@@ -389,17 +349,16 @@ export class Visual implements IVisual {
         }
     };
 
-    public handleFlyTo(settings: MapCardSettings, dataFilterApplied: boolean, allowSelectionFlyTo: boolean, selectedIdsOverride?: string[]) {
-        var minLat = 90, maxLat = -90, minLon = 180, maxLon = -180, anyPoints = false;
+    public handleFlyTo(settings: MapCardSettings, dataFilterApplied: boolean | undefined, allowSelectionFlyTo: boolean, selectedIdsOverride?: string[]) {
 
         // We only fly to if:
         // - We have never been manually navigated
         // - There is a selection *or filter*, and we want to fly to that
 
         const activeSelectedIds = selectedIdsOverride || this.selectedIds;
-        const anySelected = activeSelectedIds.length !== 0;
-        console.log(`Has manually navigated: ${this.hasManuallyBeenNavigated}, any selected: ${anySelected}, data filter applied: ${dataFilterApplied}`);
-        const canFlyTo = anySelected ? (allowSelectionFlyTo || dataFilterApplied) : (!this.hasManuallyBeenNavigated || dataFilterApplied);
+        const anySelected = activeSelectedIds && activeSelectedIds.length > 0;
+        console.log(`Has manually navigated: ${this.hasManuallyBeenNavigated}, # selections: ${activeSelectedIds.length}, data filter applied: ${dataFilterApplied}`);
+        const canFlyTo = anySelected ? !!(allowSelectionFlyTo || dataFilterApplied) : !!(!this.hasManuallyBeenNavigated || dataFilterApplied);
         console.log("[FlyTo] selectionSource=", this.selectionSource, "allowSelectionFlyTo=", allowSelectionFlyTo, "canFlyTo=", canFlyTo);
         if (!canFlyTo) {
             if (anySelected && this.selectionSource === "map" && !allowSelectionFlyTo && !dataFilterApplied) {
@@ -409,41 +368,17 @@ export class Visual implements IVisual {
             return;
         }
 
-        this.dataPoints.forEach((d) => {
-            // If there's a filter selected, only include those points
-            if (anySelected && !activeSelectedIds.includes(d.id)) {
-                return;
-            }
-            const points = getPointsFromData(d);
-            let n = points.length;
-            if (n > 0) {
-                anyPoints = true;
-            }
-            while (n--) {
-                let p = points[n],
-                    lat = p.lat,
-                    lon = p.lon;
-                if (lat < minLat) {
-                    minLat = lat;
-                }
-                if (lat > maxLat) {
-                    maxLat = lat;
-                }
-                if (lon < minLon) {
-                    minLon = lon;
-                }
-                if (lon > maxLon) {
-                    maxLon = lon;
-                }
-            }
-        });
-        console.log(`Data bounds: ${minLat},${minLon} to ${maxLat},${maxLon} (any points: ${anyPoints})`);
+        const boundsData = anySelected ? this.dataPoints.filter(d => activeSelectedIds.includes(d.id)) : this.dataPoints;
+        const dataBounds = getDataBoundingBox(boundsData);
+        console.log("Data bounds:", dataBounds);
         const defaultMinLat = settings.initialSouth.value, defaultMaxLat = settings.initialNorth.value, defaultMinLon = settings.initialWest.value, defaultMaxLon = settings.initialEast.value;
-        if (!anyPoints) {
+        if (!dataBounds) {
+            console.log("[FlyTo] No bounds found for data - flying to default view");
             this.map.fitBounds([[defaultMinLon, defaultMinLat], [defaultMaxLon, defaultMaxLat]], { duration: settings.flyToDuration.value });
         } else {
+            console.log(`[FlyTo] Data bounds: [${dataBounds.minLon}, ${dataBounds.minLat}], [${dataBounds.maxLon}, ${dataBounds.maxLat}]`);
             // OK, don't bother jumping unless:
-            // - The intersection of the bounding box containing data is less than 1% of the map AND the maps looking at greater than 30km horizontally
+            // - The intersection of the bounding box containing data is less than 1% of the map AND the maps looking at greater than 10km horizontally
             // - A data point is within 10% of the current edge of the map
             const bounds = this.map.getBounds();
             const boundsLat0 = bounds.getSouth();
@@ -451,10 +386,10 @@ export class Visual implements IVisual {
             const boundsLon0 = bounds.getWest();
             const boundsLon1 = bounds.getEast();
             // Calculate intersection:
-            const intersectionLat0 = Math.max(boundsLat0, minLat);
-            const intersectionLat1 = Math.min(boundsLat1, maxLat);
-            const intersectionLon0 = Math.max(boundsLon0, minLon);
-            const intersectionLon1 = Math.min(boundsLon1, maxLon);
+            const intersectionLat0 = Math.max(boundsLat0, dataBounds.minLat);
+            const intersectionLat1 = Math.min(boundsLat1, dataBounds.maxLat);
+            const intersectionLon0 = Math.max(boundsLon0, dataBounds.minLon);
+            const intersectionLon1 = Math.min(boundsLon1, dataBounds.maxLon);
             // OK first condition, zooming in:
             const intersectionArea = (intersectionLat1 - intersectionLat0) * (intersectionLon1 - intersectionLon0);
             const mapArea = (boundsLat1 - boundsLat0) * (boundsLon1 - boundsLon0);
@@ -462,55 +397,30 @@ export class Visual implements IVisual {
             let doZoom = false;
             const mapWidthMeters = (boundsLon1 - boundsLon0) / 1e-5;
             if (intersectionArea / mapArea < 0.01 && mapWidthMeters > 10000) {
-                console.log(`Data zoomed area too small! Intersection area ${intersectionArea}, map area ${mapArea}, map width ${mapWidthMeters.toFixed(0)} m`);
+                console.log(`Data zoomed area too small relative to map, so zooming in. Intersection area ${intersectionArea}, map area ${mapArea}, map width ${mapWidthMeters.toFixed(0)}m`);
                 doZoom = true;
             } else {
                 const dLat = (bounds.getNorth() - bounds.getSouth()) * 0.1;
                 const dLon = (bounds.getEast() - bounds.getWest()) * 0.1;
-                if (minLat < boundsLat0 + dLat || maxLat > boundsLat1 - dLat || minLon < boundsLon0 + dLon || maxLon > boundsLon1 - dLon) {
-
-                    console.log("Data points outside 10% internal buffer of map");
+                if (dataBounds.minLat < boundsLat0 + dLat || dataBounds.maxLat > boundsLat1 - dLat || dataBounds.minLon < boundsLon0 + dLon || dataBounds.maxLon > boundsLon1 - dLon) {
+                    console.log("Data points outside 10% internal buffer of map, so zooming in.");
                     doZoom = true;
                 }
             }
+            console.log("[FlyTo] doZoom=", doZoom);
             if (doZoom) {
                 // Add buffer of either % of data width or 500m, whichever is larger
                 const flyToPadding = settings.flyToPadding.value / 100;
-                let dLat = (maxLat - minLat) * flyToPadding;
-                let dLon = (maxLon - minLon) * flyToPadding;
+                let dLat = (dataBounds.maxLat - dataBounds.minLat) * flyToPadding;
+                let dLon = (dataBounds.maxLon - dataBounds.minLon) * flyToPadding;
                 dLat = Math.max(dLat, ll500);
                 dLon = Math.max(dLon, ll500);
-                this.map.fitBounds([[minLon - dLon, minLat - dLat], [maxLon + dLon, maxLat + dLat]], { duration: settings.flyToDuration.value });
+                this.map.fitBounds([[dataBounds.minLon - dLon, dataBounds.minLat - dLat], [dataBounds.maxLon + dLon, dataBounds.maxLat + dLat]], { duration: settings.flyToDuration.value });
             }
         }
-
     }
 
-    // Update: debounce updates to avoid multiple updates in quick succession when data is loading, or when multiple properties are changing at once.
-    private updateQueued = false;
-    private pendingUpdateOptions: VisualUpdateOptions | null = null;
     public update(options: VisualUpdateOptions) {
-        this.pendingUpdateOptions = options;
-        if (this.updateQueued) return;
-        this.updateQueued = true;
-        setTimeout(() => {
-            const latestOptions = this.pendingUpdateOptions;
-            this.pendingUpdateOptions = null;
-
-            if (latestOptions) {
-                this.performUpdate(latestOptions);
-            }
-
-            this.updateQueued = false;
-
-            // If another update arrived while processing, queue another pass.
-            if (this.pendingUpdateOptions) {
-                this.update(this.pendingUpdateOptions);
-            }
-        }, 150);
-    }
-
-    public performUpdate(options: VisualUpdateOptions) {
         this.lastOptions = options;
         if (this.deckOverlay === null) {
             console.log("Deck overlay not ready - retying in 100ms");
@@ -519,7 +429,10 @@ export class Visual implements IVisual {
             }, 100);
             return;
         }
-        this.formattingSettings = this.formattingSettingsService.populateFormattingSettingsModel(VisualFormattingSettingsModel, options.dataViews[0]);
+        const dataView = options.dataViews?.[0];
+        if (dataView) {
+            this.formattingSettings = this.formattingSettingsService.populateFormattingSettingsModel(VisualFormattingSettingsModel, dataView);
+        }
         var settings = this.formattingSettings;
 
         // Check if baseMap changed
@@ -529,7 +442,6 @@ export class Visual implements IVisual {
             this.currentBaseMap = newBaseMap;
         }
 
-        const dataView = options.dataViews?.[0];
         if (!dataView) {
             this.dataPoints = [];
             this.deckOverlay.setProps({ layers: [] });
