@@ -94,33 +94,9 @@ export interface RowValues {
     tooltip: any | null;
 }
 
-
-export function getPointsFromData(data: OurData): PointData[] {
-    const points: PointData[] = [];
-    if (data.lineData) {
-        points.push(data.lineData.point1);
-        points.push(data.lineData.point2);
-    }
-    if (data.scatterData) {
-        points.push(data.scatterData);
-    }
-    if (data.arcData) {
-        points.push(data.arcData.point1);
-        points.push(data.arcData.point2);
-    }
-    if (data.pathData) {
-        const bbox = data.pathData.bbox;
-        if (bbox) {
-            points.push({ lon: bbox[0], lat: bbox[1] });
-            points.push({ lon: bbox[2], lat: bbox[3] });
-        }
-    }
-    if (data.polygonData) {
-        const bbox = data.polygonData.bbox;
-        if (bbox) {
-            points.push({ lon: bbox[0], lat: bbox[1] });
-            points.push({ lon: bbox[2], lat: bbox[3] });
-        }
-    }
-    return points;
+export interface BoundingBox {
+    minLon: number;
+    minLat: number;
+    maxLon: number;
+    maxLat: number;
 }
