@@ -1,0 +1,8 @@
+*.ts              text
+*.json            text
+*.md              text diff=markdown
+*.cjs             text
+*.png             binary
+*.svg             text
+*.yml             text
+*.less            text
