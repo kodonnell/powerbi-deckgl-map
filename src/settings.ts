@@ -70,6 +70,23 @@ export class HighlightingCardSettings extends FormattingSettingsCard {
         }
     });
 
+    unselectedFadeOpacity = new formattingSettings.Slider({
+        name: "unselectedFadeOpacity",
+        displayName: "Unselected fade factor (0-100%)",
+        description: "Percentage multiplier applied to unselected polygon opacity when a polygon is selected",
+        value: 50,
+        options: {
+            minValue: {
+                type: powerbi.visuals.ValidatorType.Min,
+                value: 0
+            },
+            maxValue: {
+                type: powerbi.visuals.ValidatorType.Max,
+                value: 100
+            },
+        }
+    });
+
     autoHighlight = new formattingSettings.ToggleSwitch({
         name: "autoHighlight",
         displayName: "Highlight on hover?",
@@ -87,7 +104,7 @@ export class HighlightingCardSettings extends FormattingSettingsCard {
     autoHighlightOpacity = new formattingSettings.Slider({
         name: "autoHighlightOpacity",
         displayName: "Highlight opacity on hover",
-        description: "Opacity of highlighted points/lines",
+        description: "Opacity of highlighted points/lines (0-255)",
         value: 100,
         options: {
             minValue: {
@@ -105,9 +122,7 @@ export class HighlightingCardSettings extends FormattingSettingsCard {
     slices: Array<FormattingSettingsSlice> = [
         this.highlightOnClick,
         this.autoHighlight,
-        this.highlightSizeScale,
-        this.highlightColor,
-        this.highlightOpacity,
+        this.unselectedFadeOpacity,
         this.autoHighlightColor,
         this.autoHighlightOpacity
     ];

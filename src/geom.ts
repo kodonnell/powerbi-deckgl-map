@@ -76,11 +76,11 @@ export function getDataBoundingBox(data: OurData[]): BoundingBox | null {
         const [lats, lons] = getLatLons(d);
         for (const lat of lats) {
             if (lat < minLat) minLat = lat;
-            else if (lat > maxLat) maxLat = lat;
+            if (lat > maxLat) maxLat = lat;
         }
         for (const lon of lons) {
             if (lon < minLon) minLon = lon;
-            else if (lon > maxLon) maxLon = lon;
+            if (lon > maxLon) maxLon = lon;
         }
     }
     if (minLon === Infinity || minLat === Infinity || maxLon === -Infinity || maxLat === -Infinity) {
