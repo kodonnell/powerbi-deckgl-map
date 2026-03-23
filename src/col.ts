@@ -20,3 +20,7 @@ export function decodeHex(hex: string | null | undefined, defaultColor: [number,
 export function withOpacity(col: [number, number, number, number], opacity: number): [number, number, number, number] {
     return [col[0], col[1], col[2], opacity];
 }
+
+export function withScaledOpacity(col: [number, number, number, number], scale: number): [number, number, number, number] {
+    return [col[0], col[1], col[2], Math.round(col[3] * scale)];
+}

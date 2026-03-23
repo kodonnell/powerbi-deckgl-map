@@ -39,12 +39,10 @@ export class Visual implements IVisual {
     private dataPoints: OurData[];
     private deckOverlay: DeckOverlay | null;
     private decodeCache: {};
-    private selectedIds: string[];
+    private selectedIds: Set<string>;
     private lastOptions: VisualUpdateOptions | null;
     private hasManuallyBeenNavigated: boolean;
     private currentBaseMap: string;
-    private selectionSource: "none" | "map" | "external";
-    private internalSelectionRequestCount: number;
 
     private createResetViewControl() {
         const container = document.createElement("div");
@@ -109,11 +107,8 @@ export class Visual implements IVisual {
         }
 
         this.hasManuallyBeenNavigated = false;
-        this.selectionSource = "none";
-        this.selectedIds = [];
-        this.internalSelectionRequestCount++;
+        this.selectedIds = new Set();
         this.selectionManager.clear().finally(() => {
-            this.internalSelectionRequestCount = Math.max(0, this.internalSelectionRequestCount - 1);
             if (this.lastOptions) {
                 this.update(this.lastOptions);
             }
@@ -134,65 +129,16 @@ export class Visual implements IVisual {
         return candidates.some((ev) => !!(ev && (ev.ctrlKey || ev.metaKey)));
     }
 
-    private getSelectionKey(selectionId: any): string | null {
-        if (!selectionId) {
-            return null;
-        }
-        const getKey = selectionId.getKey;
-        if (typeof getKey === "function") {
-            return getKey.call(selectionId);
-        }
-        return null;
-    }
-
-    private syncSelectedIdsFromSelectionIds(selectionIds: any[]): boolean {
-        const keySet = new Set(
-            (selectionIds || [])
-                .map((selectionId) => this.getSelectionKey(selectionId))
-                .filter((key): key is string => !!key)
-        );
-
-        const nextSelectedIds = this.dataPoints
-            .filter((d) => {
-                const key = this.getSelectionKey(d.selectionId);
-                return key !== null && keySet.has(key);
-            })
-            .map((d) => d.id);
-
-        const changed = nextSelectedIds.length !== this.selectedIds.length
-            || nextSelectedIds.some((id) => !this.selectedIds.includes(id));
-
-        if (changed) {
-            this.selectedIds = nextSelectedIds;
-        }
-
-        return changed;
-    }
-
     constructor(options: VisualConstructorOptions) {
         this.host = options.host;
         this.selectionManager = options.host.createSelectionManager();
-        const registerOnSelectCallback = (this.selectionManager as any).registerOnSelectCallback;
-        if (typeof registerOnSelectCallback === "function") {
-            registerOnSelectCallback.call(this.selectionManager, (selectionIds: any[]) => {
-                if (this.internalSelectionRequestCount === 0) {
-                    this.selectionSource = (selectionIds && selectionIds.length > 0) ? "external" : "none";
-                }
-                const changed = this.syncSelectedIdsFromSelectionIds(selectionIds || []);
-                if (changed && this.lastOptions) {
-                    this.update(this.lastOptions);
-                }
-            });
-        }
         const localizationManager = this.host.createLocalizationManager();
         this.formattingSettingsService = new FormattingSettingsService(localizationManager);
         this.dataPoints = [];
         this.deckOverlay = null;
         this.decodeCache = {};
-        this.selectedIds = [];
+        this.selectedIds = new Set();
         this.hasManuallyBeenNavigated = false;
-        this.selectionSource = "none";
-        this.internalSelectionRequestCount = 0;
 
         // Get the settings:
         const settings = this.formattingSettingsService.populateFormattingSettingsModel(VisualFormattingSettingsModel, null);
@@ -225,13 +171,13 @@ export class Visual implements IVisual {
                         canvas.style.cursor = hoverInfo?.object ? "pointer" : "grab";
                     },
                     onClick: () => {
-                        // Clear things:
+                        // Clear things if needed:
+                        if (this.selectedIds.size === 0) {
+                            return;
+                        }
                         console.log("Map clicked - clearing selection");
-                        this.selectionSource = "map";
-                        this.selectedIds = [];
-                        this.internalSelectionRequestCount++;
+                        this.selectedIds.clear();
                         this.selectionManager.clear().finally(() => {
-                            this.internalSelectionRequestCount = Math.max(0, this.internalSelectionRequestCount - 1);
                             if (this.lastOptions) {
                                 this.update(this.lastOptions);
                             }
@@ -303,11 +249,10 @@ export class Visual implements IVisual {
     public onClick = (info, event) => {
         console.log(`Clicked on layer ${info.layer.id}`);
         if (info.object) {
-            this.selectionSource = "map";
             const multiSelect = this.isMultiSelectEvent(event);
 
             // Filter the selections:
-            const id = info.object.id;
+            const id = String(info.object.id);
             // const selectionId = info.object.selectionId;
             if (!id) {
                 console.log("Clicked on object with no id or selectionId - ignoring", info.object);
@@ -315,32 +260,33 @@ export class Visual implements IVisual {
             }
             console.log("Clicked on object with id", id, "multiSelect:", multiSelect);
             console.log("[Selection][click] selectedIds before=", this.selectedIds);
-            if (multiSelect) {
-                if (this.selectedIds.includes(id)) {
-                    this.selectedIds = this.selectedIds.filter(x => x !== id);
+            if (this.selectedIds.has(id)) {
+                if (multiSelect) {
+                    // If multi-select, we're deselecting this one, so just remove it from the selection:
+                    this.selectedIds.delete(id);
                 } else {
-                    this.selectedIds.push(id);
+                    // If not multi-select, then we're just selecting this one - so clear all other selections and select this one:
+                    this.selectedIds.clear();
+                    this.selectedIds.add(id);
                 }
             } else {
-                this.selectedIds = [id];
+                // If not multi-select, we're selecting just this one, so clear existing selections:
+                if (!multiSelect) {
+                    this.selectedIds.clear();
+                }
+                this.selectedIds.add(id);
             }
             console.log("[Selection][click] selectedIds after local toggle=", this.selectedIds);
 
             // Now get the selection IDs of the ones we're selected. (NB: why not use the selection manager and
             // info.object.properties.selectionId? Well, for some reason the selection ID is in an undefined stat)
-            const selectedIds = this.dataPoints.filter(x => this.selectedIds.includes(x.id)).map(x => x.selectionId);
+            const selectedIds = this.dataPoints.filter(x => this.selectedIds.has(String(x.id))).map(x => x.selectionId);
             if (selectedIds.length === 0) {
-                this.internalSelectionRequestCount++;
                 this.selectionManager.clear().then(() => {
-                    this.selectedIds = [];
-                }).finally(() => {
-                    this.internalSelectionRequestCount = Math.max(0, this.internalSelectionRequestCount - 1);
+                    this.selectedIds.clear();
                 });
             } else {
-                this.internalSelectionRequestCount++;
-                this.selectionManager.select(selectedIds, false).finally(() => {
-                    this.internalSelectionRequestCount = Math.max(0, this.internalSelectionRequestCount - 1);
-                });
+                this.selectionManager.select(selectedIds, false);
             }
 
             // Update so we can draw the highlights
@@ -349,26 +295,25 @@ export class Visual implements IVisual {
         }
     };
 
-    public handleFlyTo(settings: MapCardSettings, dataFilterApplied: boolean | undefined, allowSelectionFlyTo: boolean, selectedIdsOverride?: string[]) {
+    public handleFlyTo(settings: MapCardSettings, dataFilterApplied: boolean | undefined, allowSelectionFlyTo: boolean, selectedIdsOverride?: Set<string>) {
 
         // We only fly to if:
         // - We have never been manually navigated
         // - There is a selection *or filter*, and we want to fly to that
-
         const activeSelectedIds = selectedIdsOverride || this.selectedIds;
-        const anySelected = activeSelectedIds && activeSelectedIds.length > 0;
-        console.log(`Has manually navigated: ${this.hasManuallyBeenNavigated}, # selections: ${activeSelectedIds.length}, data filter applied: ${dataFilterApplied}`);
+        const anySelected = activeSelectedIds && activeSelectedIds.size > 0;
+        console.log(`Has manually navigated: ${this.hasManuallyBeenNavigated}, # selections: ${activeSelectedIds.size}, data filter applied: ${dataFilterApplied}`);
         const canFlyTo = anySelected ? !!(allowSelectionFlyTo || dataFilterApplied) : !!(!this.hasManuallyBeenNavigated || dataFilterApplied);
-        console.log("[FlyTo] selectionSource=", this.selectionSource, "allowSelectionFlyTo=", allowSelectionFlyTo, "canFlyTo=", canFlyTo);
+        console.log("[FlyTo] allowSelectionFlyTo=", allowSelectionFlyTo, "canFlyTo=", canFlyTo);
         if (!canFlyTo) {
-            if (anySelected && this.selectionSource === "map" && !allowSelectionFlyTo && !dataFilterApplied) {
+            if (anySelected && !allowSelectionFlyTo && !dataFilterApplied) {
                 console.log("[FlyTo] blocked: map-origin click selection does not trigger zoom.");
             }
             console.log("Not flying to selected because user has manually navigated");
             return;
         }
 
-        const boundsData = anySelected ? this.dataPoints.filter(d => activeSelectedIds.includes(d.id)) : this.dataPoints;
+        const boundsData = anySelected ? this.dataPoints.filter(d => activeSelectedIds.has(String(d.id))) : this.dataPoints;
         const dataBounds = getDataBoundingBox(boundsData);
         console.log("Data bounds:", dataBounds);
         const defaultMinLat = settings.initialSouth.value, defaultMaxLat = settings.initialNorth.value, defaultMinLon = settings.initialWest.value, defaultMaxLon = settings.initialEast.value;
@@ -474,46 +419,28 @@ export class Visual implements IVisual {
         // OK, process the data now we've got all of it.
         // TODO: if we want, we could draw it iteratively, but this will increase total execution time.
         this.dataPoints = createSelectorDataPoints(options, settings, this.host, this.decodeCache);
-        const visibleIdSet = new Set(this.dataPoints.map((d) => d.id));
-        this.selectedIds = this.selectedIds.filter((id) => visibleIdSet.has(id));
+        const visibleIdSet = new Set(this.dataPoints.map((d) => String(d.id)));
+        this.selectedIds = new Set([...this.selectedIds].filter((id) => visibleIdSet.has(id)));
 
-        const dataHighlightedIds = this.dataPoints.filter((d) => d.isHighlightedFromData).map((d) => d.id);
+        const dataHighlightedIds = this.dataPoints.filter((d) => d.isHighlightedFromData).map((d) => String(d.id));
         const dataFilterApplied = options.dataViews[0].metadata.isDataFilterApplied;
         const externallySelectedIds = dataHighlightedIds.length > 0
             ? dataHighlightedIds
-            : (dataFilterApplied ? this.dataPoints.map((d) => d.id) : []);
+            : (dataFilterApplied ? this.dataPoints.map((d) => String(d.id)) : []);
 
-        if (this.internalSelectionRequestCount === 0) {
-            this.selectionSource = externallySelectedIds.length > 0
-                ? "external"
-                : (this.selectedIds.length > 0 ? this.selectionSource : "none");
-        }
-
-        const effectiveSelectedIds = externallySelectedIds.length > 0 ? externallySelectedIds : this.selectedIds;
-        const hasMapSelection = this.selectionSource === "map" && this.selectedIds.length > 0;
-        const shouldShowHighlightLayers = dataHighlightedIds.length > 0 || (settings.highlighting.highlightOnClick.value && hasMapSelection);
-        const allowSelectionFlyTo = dataHighlightedIds.length > 0 || this.selectionSource === "external";
+        const effectiveSelectedIds = new Set(externallySelectedIds.length > 0 ? externallySelectedIds : this.selectedIds);
+        const allowSelectionFlyTo = dataHighlightedIds.length > 0 || externallySelectedIds.length > 0;
 
         if (settings.map.flyTo.value) {
             this.handleFlyTo(settings.map, dataFilterApplied, allowSelectionFlyTo, effectiveSelectedIds);
         }
         const layers = [
-            getScatterLayer(false, this.dataPoints, settings.scatter, settings.highlighting, effectiveSelectedIds, this.onClick),
-            getLineLayer(false, this.dataPoints, settings.line, settings.highlighting, effectiveSelectedIds, this.onClick),
-            getArcLayer(false, this.dataPoints, settings.arc, settings.highlighting, effectiveSelectedIds, this.onClick),
-            getPathLayer(false, this.dataPoints, settings.path, settings.highlighting, effectiveSelectedIds, this.onClick),
-            getPolygonLayer(false, this.dataPoints, settings.polygon, settings.highlighting, effectiveSelectedIds, this.onClick),
+            getScatterLayer(this.dataPoints, settings.scatter, settings.highlighting, effectiveSelectedIds, this.onClick),
+            getLineLayer(this.dataPoints, settings.line, settings.highlighting, effectiveSelectedIds, this.onClick),
+            getArcLayer(this.dataPoints, settings.arc, settings.highlighting, effectiveSelectedIds, this.onClick),
+            getPathLayer(this.dataPoints, settings.path, settings.highlighting, effectiveSelectedIds, this.onClick),
+            getPolygonLayer(this.dataPoints, settings.polygon, settings.highlighting, effectiveSelectedIds, this.onClick),
         ];
-        if (shouldShowHighlightLayers) {
-            const highlightLayers = [
-                getScatterLayer(true, this.dataPoints, settings.scatter, settings.highlighting, effectiveSelectedIds, this.onClick),
-                getLineLayer(true, this.dataPoints, settings.line, settings.highlighting, effectiveSelectedIds, this.onClick),
-                getArcLayer(true, this.dataPoints, settings.arc, settings.highlighting, effectiveSelectedIds, this.onClick),
-                getPathLayer(true, this.dataPoints, settings.path, settings.highlighting, effectiveSelectedIds, this.onClick),
-                getPolygonLayer(true, this.dataPoints, settings.polygon, settings.highlighting, effectiveSelectedIds, this.onClick),
-            ];
-            layers.push(...highlightLayers);
-        }
         this.deckOverlay.setProps({ layers });
 
     }

@@ -2,16 +2,14 @@ import { GeoJsonLayer } from '@deck.gl/layers';
 import { InputLayerType, OurData } from '../dataTypes';
 import { withOpacity, decodeHex } from '../col';
 import { HighlightingCardSettings, PathCardSettings } from '../settings';
+import { getLayerColor } from './col';
 
-export default function getPathLayer(highlights: boolean, dataPoints: OurData[], settings: PathCardSettings, highlighting: HighlightingCardSettings, selectedIds: string[], onClick: (info: any, event: any) => void) {
+export default function getPathLayer(dataPoints: OurData[], settings: PathCardSettings, highlighting: HighlightingCardSettings, selectedIds: Set<string>, onClick: (info: any, event: any) => void) {
     const defaultLineColor = withOpacity(decodeHex(settings.line.color.defaultLineColor.value.value, [0, 0, 0, 100]), settings.line.color.defaultLineOpacity.value);
-    let data = dataPoints.filter(x => x.type === InputLayerType.Path);
-    if (highlights) {
-        data = data.filter(x => selectedIds.includes(x.id));
-    }
-    const scale = highlights ? highlighting.highlightSizeScale.value : 1.0;
-    const selectedHighlightColor = withOpacity(decodeHex(highlighting.highlightColor.value.value, [255, 0, 0, 255]), highlighting.highlightOpacity.value);
+    const fadeFactor = Math.max(0, Math.min(1, highlighting.unselectedFadeOpacity.value / 100));
+    const shouldFadeUnselected = highlighting.highlightOnClick.value && selectedIds.size > 0;
     const autoHighlightColor = withOpacity(decodeHex(highlighting.autoHighlightColor.value.value, [255, 153, 0, 255]), highlighting.autoHighlightOpacity.value);
+    const data = dataPoints.filter(x => x.type === InputLayerType.Path);
 
     const featureCollection = data.map(d => ({
         type: "Feature" as const,
@@ -24,19 +22,19 @@ export default function getPathLayer(highlights: boolean, dataPoints: OurData[],
 
 
     return new GeoJsonLayer({
-        id: `path-layer-${highlights}`,
+        id: `path-layer-base`,
         data: featureCollection,
         pickable: true,
         getLineWidth: d => {
             const w = d.properties?.lineWidth;
             if (typeof w === "number" && isFinite(w) && w > 0) {
-                return w * scale;
+                return w;
             }
-            return settings.line.width.defaultLineWidth.value * scale;
+            return settings.line.width.defaultLineWidth.value;
         },
-        getLineColor: d => highlights ? selectedHighlightColor : decodeHex(d.properties?.lineColor, defaultLineColor),
-        lineWidthMinPixels: settings.line.width.lineWidthMinPixels.value * scale,
-        lineWidthMaxPixels: settings.line.width.lineWidthMaxPixels.value * scale,
+        getLineColor: d => getLayerColor(d.properties?.lineColor, defaultLineColor, shouldFadeUnselected, fadeFactor, selectedIds, String(d.id)),
+        lineWidthMinPixels: settings.line.width.lineWidthMinPixels.value,
+        lineWidthMaxPixels: settings.line.width.lineWidthMaxPixels.value,
         lineCapRounded: settings.path.lineCapRounded.value,
         lineJointRounded: settings.path.lineJointRounded.value,
         lineMiterLimit: settings.path.lineMiterLimit.value,
@@ -45,8 +43,8 @@ export default function getPathLayer(highlights: boolean, dataPoints: OurData[],
         highlightColor: autoHighlightColor,
         onClick: (info, event) => onClick(info, event),
         updateTriggers: {
-            getLineWidth: [settings.line.width.defaultLineWidth.value, highlighting.highlightSizeScale.value, selectedIds],
-            getLineColor: [settings.line.color.defaultLineColor.value.value, settings.line.color.defaultLineOpacity.value, highlighting.highlightColor.value.value, highlighting.highlightOpacity.value, selectedIds],
+            getLineWidth: [settings.line.width.defaultLineWidth.value, selectedIds],
+            getLineColor: [settings.line.color.defaultLineColor.value.value, settings.line.color.defaultLineOpacity.value, highlighting.highlightOnClick.value, highlighting.unselectedFadeOpacity.value, selectedIds],
             getLineCapRounded: [settings.path.lineCapRounded.value],
             getLineJointRounded: [settings.path.lineJointRounded.value],
             getLineMiterLimit: [settings.path.lineMiterLimit.value],

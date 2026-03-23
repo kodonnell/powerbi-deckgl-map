@@ -205,21 +205,7 @@
                         "bool": true
                     }
                 },
-                "highlightSizeScale": {
-                    "type": {
-                        "numeric": true
-                    }
-                },
-                "highlightColor": {
-                    "type": {
-                        "fill": {
-                            "solid": {
-                                "color": true
-                            }
-                        }
-                    }
-                },
-                "highlightOpacity": {
+                "unselectedFadeOpacity": {
                     "type": {
                         "numeric": true
                     }

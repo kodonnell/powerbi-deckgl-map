@@ -31,7 +31,6 @@ function base64ToUint8Array(base64: string): Uint8Array {
 })();
 
 export function decodeAsGeometry(encoded: string): Geometry {
-    console.log("Decoding WKP geometry...");
     if (initError) {
         throw initError;
     }
