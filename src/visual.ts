@@ -41,7 +41,8 @@ export class Visual implements IVisual {
     private decodeCache: {};
     private selectedIds: Set<string>;
     private lastOptions: VisualUpdateOptions | null;
-    private hasManuallyBeenNavigated: boolean;
+    private hasInitialViewBeenSet: boolean;
+    private suppressNextFlyTo: boolean;
     private currentBaseMap: string;
 
     private createResetViewControl() {
@@ -76,37 +77,9 @@ export class Visual implements IVisual {
 
         const mapSettings = this.formattingSettings?.map
             || this.formattingSettingsService.populateFormattingSettingsModel(VisualFormattingSettingsModel, null).map;
-        const duration = mapSettings.flyToDuration.value;
-        const ll500 = 500 * 1e-5;
-
-        const center = this.map.getCenter();
-        this.map.jumpTo({
-            center,
-            zoom: this.map.getZoom(),
-            bearing: 0,
-            pitch: 0,
-        });
-
-        const bounds = getDataBoundingBox(this.dataPoints || []);
-        if (!bounds) {
-            this.map.fitBounds(
-                [[mapSettings.initialWest.value, mapSettings.initialSouth.value], [mapSettings.initialEast.value, mapSettings.initialNorth.value]],
-                { duration }
-            );
-        } else {
-            const flyToPadding = mapSettings.flyToPadding.value / 100;
-            let dLat = (bounds.maxLat - bounds.minLat) * flyToPadding;
-            let dLon = (bounds.maxLon - bounds.minLon) * flyToPadding;
-            dLat = Math.max(dLat, ll500);
-            dLon = Math.max(dLon, ll500);
-
-            this.map.fitBounds(
-                [[bounds.minLon - dLon, bounds.minLat - dLat], [bounds.maxLon + dLon, bounds.maxLat + dLat]],
-                { duration }
-            );
-        }
-
-        this.hasManuallyBeenNavigated = false;
+        this.handleFlyTo(mapSettings);
+        this.hasInitialViewBeenSet = true;
+        this.suppressNextFlyTo = true;
         this.selectedIds = new Set();
         this.selectionManager.clear().finally(() => {
             if (this.lastOptions) {
@@ -138,7 +111,8 @@ export class Visual implements IVisual {
         this.deckOverlay = null;
         this.decodeCache = {};
         this.selectedIds = new Set();
-        this.hasManuallyBeenNavigated = false;
+        this.hasInitialViewBeenSet = false;
+        this.suppressNextFlyTo = false;
 
         // Get the settings:
         const settings = this.formattingSettingsService.populateFormattingSettingsModel(VisualFormattingSettingsModel, null);
@@ -158,7 +132,7 @@ export class Visual implements IVisual {
             });
             this.map.on('load', () => {
                 console.log("Loaded");
-                this.hasManuallyBeenNavigated = false;
+                this.hasInitialViewBeenSet = false;
                 this.deckOverlay = new DeckOverlay({
                     interleaved: false, // Don't set to true - bricks performance!
                     layers: [],
@@ -176,6 +150,7 @@ export class Visual implements IVisual {
                             return;
                         }
                         console.log("Map clicked - clearing selection");
+                        this.suppressNextFlyTo = true;
                         this.selectedIds.clear();
                         this.selectionManager.clear().finally(() => {
                             if (this.lastOptions) {
@@ -203,13 +178,6 @@ export class Visual implements IVisual {
                             }
                         };
                     }
-                });
-                this.map.on('movestart', () => {
-                    console.log("Map move started");
-                    this.hasManuallyBeenNavigated = true;
-                });
-                this.map.on('moveend', () => {
-                    console.log("Map move ended");
                 });
                 this.map.addControl(this.deckOverlay);
                 this.map.addControl(new NavigationControl());
@@ -265,9 +233,14 @@ export class Visual implements IVisual {
                     // If multi-select, we're deselecting this one, so just remove it from the selection:
                     this.selectedIds.delete(id);
                 } else {
-                    // If not multi-select, then we're just selecting this one - so clear all other selections and select this one:
+                    // If not multi-select, then this one is already clicked, so we're unselecting it. If there's currently just
+                    // this one selected, then clear the selection. If there are multiple selected, then clear the selection
+                    // and select this one (i.e. toggle to just this one).
+                    const onlyThisOneSelected = this.selectedIds.size === 1 && this.selectedIds.has(id);
                     this.selectedIds.clear();
-                    this.selectedIds.add(id);
+                    if (!onlyThisOneSelected) {
+                        this.selectedIds.add(id);
+                    }
                 }
             } else {
                 // If not multi-select, we're selecting just this one, so clear existing selections:
@@ -290,30 +263,15 @@ export class Visual implements IVisual {
             }
 
             // Update so we can draw the highlights
+            this.suppressNextFlyTo = true;
             this.update(this.lastOptions);
             return true; // don't propagate the event
         }
     };
 
-    public handleFlyTo(settings: MapCardSettings, dataFilterApplied: boolean | undefined, allowSelectionFlyTo: boolean, selectedIdsOverride?: Set<string>) {
-
-        // We only fly to if:
-        // - We have never been manually navigated
-        // - There is a selection *or filter*, and we want to fly to that
-        const activeSelectedIds = selectedIdsOverride || this.selectedIds;
-        const anySelected = activeSelectedIds && activeSelectedIds.size > 0;
-        console.log(`Has manually navigated: ${this.hasManuallyBeenNavigated}, # selections: ${activeSelectedIds.size}, data filter applied: ${dataFilterApplied}`);
-        const canFlyTo = anySelected ? !!(allowSelectionFlyTo || dataFilterApplied) : !!(!this.hasManuallyBeenNavigated || dataFilterApplied);
-        console.log("[FlyTo] allowSelectionFlyTo=", allowSelectionFlyTo, "canFlyTo=", canFlyTo);
-        if (!canFlyTo) {
-            if (anySelected && !allowSelectionFlyTo && !dataFilterApplied) {
-                console.log("[FlyTo] blocked: map-origin click selection does not trigger zoom.");
-            }
-            console.log("Not flying to selected because user has manually navigated");
-            return;
-        }
-
-        const boundsData = anySelected ? this.dataPoints.filter(d => activeSelectedIds.has(String(d.id))) : this.dataPoints;
+    public handleFlyTo(settings: MapCardSettings, selectedIdsOverride?: Set<string>) {
+        const activeSelectedIds = selectedIdsOverride && selectedIdsOverride.size > 0 ? selectedIdsOverride : null;
+        const boundsData = activeSelectedIds ? this.dataPoints.filter(d => activeSelectedIds.has(String(d.id))) : this.dataPoints;
         const dataBounds = getDataBoundingBox(boundsData);
         console.log("Data bounds:", dataBounds);
         const defaultMinLat = settings.initialSouth.value, defaultMaxLat = settings.initialNorth.value, defaultMinLon = settings.initialWest.value, defaultMaxLon = settings.initialEast.value;
@@ -322,46 +280,13 @@ export class Visual implements IVisual {
             this.map.fitBounds([[defaultMinLon, defaultMinLat], [defaultMaxLon, defaultMaxLat]], { duration: settings.flyToDuration.value });
         } else {
             console.log(`[FlyTo] Data bounds: [${dataBounds.minLon}, ${dataBounds.minLat}], [${dataBounds.maxLon}, ${dataBounds.maxLat}]`);
-            // OK, don't bother jumping unless:
-            // - The intersection of the bounding box containing data is less than 1% of the map AND the maps looking at greater than 10km horizontally
-            // - A data point is within 10% of the current edge of the map
-            const bounds = this.map.getBounds();
-            const boundsLat0 = bounds.getSouth();
-            const boundsLat1 = bounds.getNorth();
-            const boundsLon0 = bounds.getWest();
-            const boundsLon1 = bounds.getEast();
-            // Calculate intersection:
-            const intersectionLat0 = Math.max(boundsLat0, dataBounds.minLat);
-            const intersectionLat1 = Math.min(boundsLat1, dataBounds.maxLat);
-            const intersectionLon0 = Math.max(boundsLon0, dataBounds.minLon);
-            const intersectionLon1 = Math.min(boundsLon1, dataBounds.maxLon);
-            // OK first condition, zooming in:
-            const intersectionArea = (intersectionLat1 - intersectionLat0) * (intersectionLon1 - intersectionLon0);
-            const mapArea = (boundsLat1 - boundsLat0) * (boundsLon1 - boundsLon0);
             const ll500 = 500 * 1e-5;
-            let doZoom = false;
-            const mapWidthMeters = (boundsLon1 - boundsLon0) / 1e-5;
-            if (intersectionArea / mapArea < 0.01 && mapWidthMeters > 10000) {
-                console.log(`Data zoomed area too small relative to map, so zooming in. Intersection area ${intersectionArea}, map area ${mapArea}, map width ${mapWidthMeters.toFixed(0)}m`);
-                doZoom = true;
-            } else {
-                const dLat = (bounds.getNorth() - bounds.getSouth()) * 0.1;
-                const dLon = (bounds.getEast() - bounds.getWest()) * 0.1;
-                if (dataBounds.minLat < boundsLat0 + dLat || dataBounds.maxLat > boundsLat1 - dLat || dataBounds.minLon < boundsLon0 + dLon || dataBounds.maxLon > boundsLon1 - dLon) {
-                    console.log("Data points outside 10% internal buffer of map, so zooming in.");
-                    doZoom = true;
-                }
-            }
-            console.log("[FlyTo] doZoom=", doZoom);
-            if (doZoom) {
-                // Add buffer of either % of data width or 500m, whichever is larger
-                const flyToPadding = settings.flyToPadding.value / 100;
-                let dLat = (dataBounds.maxLat - dataBounds.minLat) * flyToPadding;
-                let dLon = (dataBounds.maxLon - dataBounds.minLon) * flyToPadding;
-                dLat = Math.max(dLat, ll500);
-                dLon = Math.max(dLon, ll500);
-                this.map.fitBounds([[dataBounds.minLon - dLon, dataBounds.minLat - dLat], [dataBounds.maxLon + dLon, dataBounds.maxLat + dLat]], { duration: settings.flyToDuration.value });
-            }
+            const flyToPadding = settings.flyToPadding.value / 100;
+            let dLat = (dataBounds.maxLat - dataBounds.minLat) * flyToPadding;
+            let dLon = (dataBounds.maxLon - dataBounds.minLon) * flyToPadding;
+            dLat = Math.max(dLat, ll500);
+            dLon = Math.max(dLon, ll500);
+            this.map.fitBounds([[dataBounds.minLon - dLon, dataBounds.minLat - dLat], [dataBounds.maxLon + dLon, dataBounds.maxLat + dLat]], { duration: settings.flyToDuration.value });
         }
     }
 
@@ -389,6 +314,7 @@ export class Visual implements IVisual {
 
         if (!dataView) {
             this.dataPoints = [];
+            this.hasInitialViewBeenSet = false;
             this.deckOverlay.setProps({ layers: [] });
             return;
         }
@@ -419,27 +345,38 @@ export class Visual implements IVisual {
         // OK, process the data now we've got all of it.
         // TODO: if we want, we could draw it iteratively, but this will increase total execution time.
         this.dataPoints = createSelectorDataPoints(options, settings, this.host, this.decodeCache);
+        if (this.dataPoints.length === 0) {
+            this.hasInitialViewBeenSet = false;
+        }
         const visibleIdSet = new Set(this.dataPoints.map((d) => String(d.id)));
         this.selectedIds = new Set([...this.selectedIds].filter((id) => visibleIdSet.has(id)));
 
         const dataHighlightedIds = this.dataPoints.filter((d) => d.isHighlightedFromData).map((d) => String(d.id));
         const dataFilterApplied = options.dataViews[0].metadata.isDataFilterApplied;
-        const externallySelectedIds = dataHighlightedIds.length > 0
-            ? dataHighlightedIds
-            : (dataFilterApplied ? this.dataPoints.map((d) => String(d.id)) : []);
+        const visualSelectedIds = new Set(dataHighlightedIds.length > 0 ? dataHighlightedIds : this.selectedIds);
+        const flyToSelectedIds = new Set(dataHighlightedIds.length > 0 ? dataHighlightedIds : (dataFilterApplied ? this.dataPoints.map((d) => String(d.id)) : []));
+        const suppressFlyTo = this.suppressNextFlyTo;
+        this.suppressNextFlyTo = false;
 
-        const effectiveSelectedIds = new Set(externallySelectedIds.length > 0 ? externallySelectedIds : this.selectedIds);
-        const allowSelectionFlyTo = dataHighlightedIds.length > 0 || externallySelectedIds.length > 0;
+        console.log("[FlyTo] suppressNextFlyTo consumed:", suppressFlyTo);
+        const shouldFlyToSelection = flyToSelectedIds.size > 0;
+        const shouldFlyToInitialBounds = !this.hasInitialViewBeenSet && !shouldFlyToSelection;
 
-        if (settings.map.flyTo.value) {
-            this.handleFlyTo(settings.map, dataFilterApplied, allowSelectionFlyTo, effectiveSelectedIds);
+        if (settings.map.flyTo.value && !suppressFlyTo) {
+            if (shouldFlyToSelection) {
+                this.handleFlyTo(settings.map, flyToSelectedIds);
+                this.hasInitialViewBeenSet = true;
+            } else if (shouldFlyToInitialBounds) {
+                this.handleFlyTo(settings.map);
+                this.hasInitialViewBeenSet = true;
+            }
         }
         const layers = [
-            getScatterLayer(this.dataPoints, settings.scatter, settings.highlighting, effectiveSelectedIds, this.onClick),
-            getLineLayer(this.dataPoints, settings.line, settings.highlighting, effectiveSelectedIds, this.onClick),
-            getArcLayer(this.dataPoints, settings.arc, settings.highlighting, effectiveSelectedIds, this.onClick),
-            getPathLayer(this.dataPoints, settings.path, settings.highlighting, effectiveSelectedIds, this.onClick),
-            getPolygonLayer(this.dataPoints, settings.polygon, settings.highlighting, effectiveSelectedIds, this.onClick),
+            getScatterLayer(this.dataPoints, settings.scatter, settings.highlighting, visualSelectedIds, this.onClick),
+            getLineLayer(this.dataPoints, settings.line, settings.highlighting, visualSelectedIds, this.onClick),
+            getArcLayer(this.dataPoints, settings.arc, settings.highlighting, visualSelectedIds, this.onClick),
+            getPathLayer(this.dataPoints, settings.path, settings.highlighting, visualSelectedIds, this.onClick),
+            getPolygonLayer(this.dataPoints, settings.polygon, settings.highlighting, visualSelectedIds, this.onClick),
         ];
         this.deckOverlay.setProps({ layers });
 
