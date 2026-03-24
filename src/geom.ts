@@ -1,5 +1,52 @@
 import { BoundingBox, OurData } from './dataTypes';
 
+function getMinimalLongitudeRange(lons: number[]): { minLon: number; maxLon: number } | null {
+    if (lons.length === 0) {
+        return null;
+    }
+
+    const normalized = lons
+        .filter((lon) => Number.isFinite(lon))
+        .map((lon) => (lon < 0 ? lon + 360 : lon))
+        .sort((a, b) => a - b);
+
+    if (normalized.length === 0) {
+        return null;
+    }
+
+    if (normalized.length === 1) {
+        const lon = normalized[0] > 180 ? normalized[0] - 360 : normalized[0];
+        return { minLon: lon, maxLon: lon };
+    }
+
+    let largestGap = -1;
+    let gapIndex = -1;
+    for (let i = 0; i < normalized.length; i++) {
+        const current = normalized[i];
+        const next = i === normalized.length - 1 ? normalized[0] + 360 : normalized[i + 1];
+        const gap = next - current;
+        if (gap > largestGap) {
+            largestGap = gap;
+            gapIndex = i;
+        }
+    }
+
+    const rangeStart = gapIndex === normalized.length - 1 ? normalized[0] : normalized[gapIndex + 1];
+    let rangeEnd = normalized[gapIndex];
+    if (rangeEnd < rangeStart) {
+        rangeEnd += 360;
+    }
+
+    if (rangeStart > 180 && rangeEnd > 180) {
+        return { minLon: rangeStart - 360, maxLon: rangeEnd - 360 };
+    }
+
+    return {
+        minLon: rangeStart > 180 ? rangeStart - 360 : rangeStart,
+        maxLon: rangeEnd,
+    };
+}
+
 export function getLatLons(d: OurData): number[][] {
     const lats: number[] = [];
     const lons: number[] = [];
@@ -68,25 +115,22 @@ export function getLatLons(d: OurData): number[][] {
 
 
 export function getDataBoundingBox(data: OurData[]): BoundingBox | null {
-    let minLon = Infinity;
     let minLat = Infinity;
-    let maxLon = -Infinity;
     let maxLat = -Infinity;
+    const lons: number[] = [];
     for (const d of data) {
-        const [lats, lons] = getLatLons(d);
+        const [lats, rowLons] = getLatLons(d);
         for (const lat of lats) {
             if (lat < minLat) minLat = lat;
             if (lat > maxLat) maxLat = lat;
         }
-        for (const lon of lons) {
-            if (lon < minLon) minLon = lon;
-            if (lon > maxLon) maxLon = lon;
-        }
+        lons.push(...rowLons);
     }
-    if (minLon === Infinity || minLat === Infinity || maxLon === -Infinity || maxLat === -Infinity) {
+    const lonRange = getMinimalLongitudeRange(lons);
+    if (!lonRange || minLat === Infinity || maxLat === -Infinity) {
         return null; // No valid data found
     }
-    return { minLon, minLat, maxLon, maxLat };
+    return { minLon: lonRange.minLon, minLat, maxLon: lonRange.maxLon, maxLat };
 }
 
 
